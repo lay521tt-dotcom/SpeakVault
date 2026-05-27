@@ -1,25 +1,17 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { Expression, ExpressionInsert } from "../lib/database.types";
+import { supabase } from "../lib/supabase";
 
 type ViewName = "practice" | "generate" | "library" | "plan" | "profile";
-type MasteryStatus = "New" | "Practising" | "Struggling" | "Mastered";
-
-type Expression = {
-  id: number;
-  english: string;
-  chinese: string;
-  category: string;
-  difficulty: string;
-  status: MasteryStatus;
-  tags: string[];
-  note: string;
-  alternatives: string[];
-};
+type AuthMode = "sign-in" | "sign-up";
 
 const starterLibrary: Expression[] = [
   {
-    id: 1,
+    id: "starter-1",
+    user_id: "demo",
     english: "Could I just check whether this figure is based on the latest client information?",
     chinese: "我想确认一下这个数字是基于最新的客户资料吗？",
     category: "Work Meeting",
@@ -28,9 +20,12 @@ const starterLibrary: Expression[] = [
     tags: ["tax return", "clarification", "manager"],
     note: "Softens the question with “Could I just check”, which sounds natural in NZ/AU meetings.",
     alternatives: ["Can I quickly confirm the source of this figure?", "Is this based on the latest client docs?"],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
   {
-    id: 2,
+    id: "starter-2",
+    user_id: "demo",
     english: "I’ll double-check that and come back to you shortly.",
     chinese: "我会再核对一下，然后尽快回复你。",
     category: "Work Meeting",
@@ -39,9 +34,12 @@ const starterLibrary: Expression[] = [
     tags: ["figures", "follow-up", "client docs"],
     note: "Concise and confident when you need more time without over-explaining.",
     alternatives: ["Let me verify that first.", "I’ll check that and get back to you."],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
   {
-    id: 3,
+    id: "starter-3",
+    user_id: "demo",
     english: "Could I jump in with one quick point?",
     chinese: "我可以插一句很快的观点吗？",
     category: "Work Meeting",
@@ -50,21 +48,12 @@ const starterLibrary: Expression[] = [
     tags: ["interrupting", "polite", "meeting"],
     note: "A common, low-friction way to enter a conversation.",
     alternatives: ["Can I add one quick thing?", "Could I quickly add to that?"],
-  },
-  {
-    id: 4,
-    english: "I’m not fully convinced it’s the optimal option yet, but we could test it and see how it goes.",
-    chinese: "我还不完全相信这是最优选择，但我们可以测试一下看看效果。",
-    category: "Work Meeting",
-    difficulty: "Advanced",
-    status: "Struggling",
-    tags: ["disagreeing", "strategy", "soft tone"],
-    note: "Disagrees without sounding blunt and keeps the discussion collaborative.",
-    alternatives: ["I’m not sure it’s the best option yet.", "We could trial it before committing."],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
 ];
 
-const generatedSamples: Omit<Expression, "id" | "status">[] = [
+const generatedSamples: Omit<ExpressionInsert, "status">[] = [
   {
     english: "I’m not completely sure this is the best approach, but I think it’s worth trialling first.",
     chinese: "我不完全确定这是最优方案，但我觉得值得先试一下。",
@@ -103,14 +92,44 @@ const viewTitles: Record<ViewName, string> = {
 };
 
 export default function Home() {
-  const [isSignedIn, setIsSignedIn] = useState(false);
   const [activeView, setActiveView] = useState<ViewName>("practice");
+  const [authMode, setAuthMode] = useState<AuthMode>("sign-in");
+  const [authEmail, setAuthEmail] = useState("you@auckland.nz");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [thought, setThought] = useState("我不是很确定这个方案是不是最优的，但我觉得我们可以先试一下。");
-  const [library, setLibrary] = useState<Expression[]>(starterLibrary);
+  const [library, setLibrary] = useState<Expression[]>([]);
+  const [isLibraryLoading, setIsLibraryLoading] = useState(false);
   const [query, setQuery] = useState("");
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [savingExpression, setSavingExpression] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      setIsAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setLibrary([]);
+      return;
+    }
+
+    loadExpressions();
+  }, [user]);
 
   const filteredLibrary = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -132,26 +151,95 @@ export default function Home() {
     );
   }, [library, query]);
 
-  function signIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsSignedIn(true);
+  async function loadExpressions() {
+    setIsLibraryLoading(true);
+    const { data, error } = await supabase.from("expressions").select("*").order("created_at", { ascending: false });
+
+    if (error) {
+      setAuthMessage(`Could not load your library: ${error.message}`);
+      setLibrary([]);
+    } else {
+      setLibrary(data ?? []);
+    }
+
+    setIsLibraryLoading(false);
   }
 
-  function saveExpression(sample: Omit<Expression, "id" | "status">) {
-    const key = `${sample.english}-${sample.difficulty}`;
-    if (savedIds.has(key)) return;
+  async function handleAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthMessage("");
+    setIsAuthLoading(true);
 
-    const nextExpression: Expression = {
-      ...sample,
-      id: Date.now(),
-      status: "New",
+    const credentials = {
+      email: authEmail,
+      password: authPassword,
     };
 
-    setLibrary((current) => [nextExpression, ...current]);
-    setSavedIds((current) => new Set(current).add(key));
+    const { data, error } =
+      authMode === "sign-in"
+        ? await supabase.auth.signInWithPassword(credentials)
+        : await supabase.auth.signUp(credentials);
+
+    if (error) {
+      setAuthMessage(error.message);
+    } else if (authMode === "sign-up" && !data.session) {
+      setAuthMessage("Account created. Please check your email to confirm your sign-up.");
+    } else {
+      setUser(data.user);
+      setAuthMessage("");
+    }
+
+    setIsAuthLoading(false);
   }
 
-  if (!isSignedIn) {
+  async function signOut() {
+    await supabase.auth.signOut();
+    setUser(null);
+    setLibrary([]);
+    setActiveView("practice");
+  }
+
+  async function saveExpression(sample: Omit<ExpressionInsert, "status">) {
+    if (!user) return;
+
+    const key = `${sample.english}-${sample.difficulty}`;
+    setSavingExpression(key);
+
+    const { data, error } = await supabase
+      .from("expressions")
+      .insert({
+        ...sample,
+        status: "New",
+        user_id: user.id,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      setAuthMessage(`Could not save expression: ${error.message}`);
+    } else if (data) {
+      setLibrary((current) => [data, ...current]);
+      setActiveView("library");
+    }
+
+    setSavingExpression("");
+  }
+
+  if (isAuthLoading && !user) {
+    return (
+      <main className="phone-shell">
+        <section className="screen active loading-screen" aria-label="Loading">
+          <div className="brand-mark" aria-label="SpeakVault logo">
+            <span className="vault-arc" />
+            <span className="brand-letters">SV</span>
+          </div>
+          <p>Loading SpeakVault...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!user) {
     return (
       <main className="phone-shell">
         <section className="screen active" aria-label="Login">
@@ -168,23 +256,49 @@ export default function Home() {
             <h1>SpeakVault</h1>
             <p>Build a private vault of workplace-ready English you can actually say.</p>
           </div>
-          <form className="login-card" onSubmit={signIn}>
+          <form className="login-card" onSubmit={handleAuth}>
+            <div className="auth-toggle" aria-label="Authentication mode">
+              <button
+                className={authMode === "sign-in" ? "active" : ""}
+                type="button"
+                onClick={() => setAuthMode("sign-in")}
+              >
+                Sign in
+              </button>
+              <button
+                className={authMode === "sign-up" ? "active" : ""}
+                type="button"
+                onClick={() => setAuthMode("sign-up")}
+              >
+                Create account
+              </button>
+            </div>
             <label>
               Email
-              <input type="email" defaultValue="you@auckland.nz" autoComplete="email" />
+              <input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} autoComplete="email" />
             </label>
             <label>
               Password
-              <input type="password" defaultValue="speakvault" autoComplete="current-password" />
+              <input
+                type="password"
+                value={authPassword}
+                onChange={(event) => setAuthPassword(event.target.value)}
+                autoComplete={authMode === "sign-in" ? "current-password" : "new-password"}
+                minLength={6}
+                placeholder="At least 6 characters"
+              />
             </label>
-            <button className="primary-button" type="submit">
-              Sign in
+            {authMessage && <p className="form-message">{authMessage}</p>}
+            <button className="primary-button" type="submit" disabled={isAuthLoading}>
+              {isAuthLoading ? "Working..." : authMode === "sign-in" ? "Sign in" : "Create account"}
             </button>
           </form>
         </section>
       </main>
     );
   }
+
+  const reviewItems = library.length > 0 ? library.slice(0, 2) : starterLibrary.slice(0, 2);
 
   return (
     <main className="phone-shell">
@@ -195,9 +309,11 @@ export default function Home() {
             <h2>{viewTitles[activeView]}</h2>
           </div>
           <button className="icon-button" type="button" onClick={() => setActiveView("profile")} aria-label="Open profile">
-            YK
+            {user.email?.slice(0, 2).toUpperCase() ?? "SV"}
           </button>
         </header>
+
+        {authMessage && <p className="app-message">{authMessage}</p>}
 
         {activeView === "practice" && (
           <div className="view active">
@@ -272,7 +388,7 @@ export default function Home() {
                 </button>
               </div>
               <div className="mini-list">
-                {library.slice(0, 2).map((item) => (
+                {reviewItems.map((item) => (
                   <button className="mini-item" key={item.id} type="button" onClick={() => setActiveView("library")}>
                     <span>{item.english}</span>
                     <b>{item.status}</b>
@@ -296,6 +412,7 @@ export default function Home() {
             <section className="generated-list">
               {generatedSamples.map((sample) => {
                 const key = `${sample.english}-${sample.difficulty}`;
+                const alreadySaved = library.some((item) => item.english === sample.english);
                 return (
                   <article className="expression-card" key={key}>
                     <div className="card-topline">
@@ -310,8 +427,13 @@ export default function Home() {
                         <span key={tag}>{tag}</span>
                       ))}
                     </div>
-                    <button className="secondary-button" type="button" onClick={() => saveExpression(sample)}>
-                      {savedIds.has(key) ? "Saved" : "Save to Library"}
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => saveExpression(sample)}
+                      disabled={alreadySaved || savingExpression === key}
+                    >
+                      {alreadySaved ? "Saved" : savingExpression === key ? "Saving..." : "Save to Library"}
                     </button>
                   </article>
                 );
@@ -343,10 +465,15 @@ export default function Home() {
               </div>
             </section>
             <section className="library-list">
-              {filteredLibrary.length === 0 ? (
+              {isLibraryLoading ? (
                 <article className="library-card">
-                  <h3>No expressions found</h3>
-                  <p>Try searching for meeting, figure, 插话, or weekend.</p>
+                  <h3>Loading your vault...</h3>
+                  <p>Fetching your saved expressions from Supabase.</p>
+                </article>
+              ) : filteredLibrary.length === 0 ? (
+                <article className="library-card">
+                  <h3>Your vault is empty</h3>
+                  <p>Go to Generate, save an expression, and it will appear here.</p>
                 </article>
               ) : (
                 filteredLibrary.map((item) => (
@@ -401,8 +528,9 @@ export default function Home() {
         {activeView === "profile" && (
           <div className="view active">
             <section className="profile-panel">
-              <div className="avatar">YK</div>
+              <div className="avatar">{user.email?.slice(0, 2).toUpperCase() ?? "SV"}</div>
               <h3>Tax Accountant · Auckland</h3>
+              <p>{user.email}</p>
               <p>Target accent: NZ / AU workplace English</p>
             </section>
             <section className="settings-list">
@@ -410,13 +538,17 @@ export default function Home() {
                 ["AI voice", "Selectable"],
                 ["Interface language", "English"],
                 ["Visual style", "Notion simple"],
-                ["Login security", "Email"],
+                ["Login security", "Supabase Auth"],
               ].map(([label, value]) => (
                 <button className="setting-row" key={label} type="button">
                   <span>{label}</span>
                   <b>{value}</b>
                 </button>
               ))}
+              <button className="setting-row" type="button" onClick={signOut}>
+                <span>Session</span>
+                <b>Sign out</b>
+              </button>
             </section>
           </div>
         )}

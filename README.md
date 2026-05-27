@@ -25,6 +25,33 @@ Open:
 http://localhost:3000
 ```
 
+## Environment
+
+Create `.env.local` from `.env.example`:
+
+```bash
+cp .env.example .env.local
+```
+
+Set:
+
+```txt
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```
+
+## Supabase Setup
+
+Run the SQL in [supabase/schema.sql](supabase/schema.sql) inside the Supabase SQL editor.
+
+This creates:
+
+- `expressions` table
+- `mastery_status` enum
+- row-level security policies so each user can only access their own expressions
+- indexes for library queries
+- `updated_at` trigger
+
 ## Verification
 
 ```bash

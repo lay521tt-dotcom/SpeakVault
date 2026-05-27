@@ -68,6 +68,16 @@ button {
   padding: 4rem 1.25rem 1.5rem;
 }
 
+.loading-screen {
+  min-height: 100dvh;
+  padding: 1.25rem;
+  display: grid;
+  place-content: center;
+  gap: 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
 .login-orbit {
   width: 13rem;
   height: 13rem;
@@ -183,6 +193,30 @@ button {
   gap: 0.95rem;
 }
 
+.auth-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border-radius: 8px;
+  background: var(--panel-strong);
+}
+
+.auth-toggle button {
+  min-height: 2.4rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.auth-toggle button.active {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 6px 16px var(--shadow);
+}
+
 label {
   display: grid;
   gap: 0.45rem;
@@ -232,6 +266,28 @@ textarea {
   background: var(--text);
   color: #fff;
   font-weight: 800;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.form-message,
+.app-message {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid #e7d8c6;
+  border-radius: 8px;
+  background: #fff8ef;
+  color: var(--warm);
+  line-height: 1.45;
+  font-size: 0.88rem;
+}
+
+.app-message {
+  margin-bottom: 0.85rem;
 }
 
 .secondary-button {
