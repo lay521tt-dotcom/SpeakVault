@@ -1,0 +1,10 @@
+{
+  "name": "SpeakVault",
+  "short_name": "SpeakVault",
+  "description": "A personal English speaking vault for workplace-ready expressions.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fbfaf8",
+  "theme_color": "#fbfaf8",
+  "icons": []
+}

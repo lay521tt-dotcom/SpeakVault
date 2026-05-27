@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpeakVault Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="phone-shell">
+      <section class="screen active" id="login-screen" aria-label="Login">
+        <div class="login-orbit">
+          <div class="signal-ring ring-one"></div>
+          <div class="signal-ring ring-two"></div>
+          <div class="brand-mark" aria-label="SpeakVault logo">
+            <span class="vault-arc"></span>
+            <span class="brand-letters">SV</span>
+          </div>
+        </div>
+        <div class="login-copy">
+          <p class="eyebrow">Personal fluency system</p>
+          <h1>SpeakVault</h1>
+          <p>Build a private bank of workplace-ready English you can actually say.</p>
+        </div>
+        <form class="login-card" id="login-form">
+          <label>
+            Email
+            <input type="email" value="you@auckland.nz" autocomplete="email" />
+          </label>
+          <label>
+            Password
+            <input type="password" value="speakvault" autocomplete="current-password" />
+          </label>
+          <button class="primary-button" type="submit">Sign in</button>
+        </form>
+      </section>
+
+      <section class="screen" id="app-screen" aria-label="SpeakVault app">
+        <header class="app-header">
+          <div>
+            <p class="eyebrow">Day 4 of 30</p>
+            <h2 id="view-title">Practice</h2>
+          </div>
+          <button class="icon-button" type="button" data-view="profile" aria-label="Open profile">YK</button>
+        </header>
+
+        <div class="view active" id="practice-view">
+          <section class="daily-panel">
+            <div>
+              <p class="eyebrow">Today’s mission</p>
+              <h3>Ask for clarification in a tax meeting</h3>
+              <p>Focus on sounding calm, specific, and professional when you need more context.</p>
+            </div>
+            <button class="pulse-button" type="button" id="start-practice">Start</button>
+          </section>
+
+          <section class="metric-grid" aria-label="Daily metrics">
+            <article>
+              <strong>10</strong>
+              <span>min learn</span>
+            </article>
+            <article>
+              <strong>10</strong>
+              <span>min speak</span>
+            </article>
+            <article>
+              <strong>10</strong>
+              <span>min review</span>
+            </article>
+          </section>
+
+          <section class="practice-card">
+            <div class="card-topline">
+              <span>Speaking prompt</span>
+              <b>Work Meeting</b>
+            </div>
+            <p class="chinese-prompt">我想确认一下这个数字是基于最新的客户资料吗？</p>
+            <button class="record-button" type="button" id="record-button">
+              <span></span>
+              Hold to speak
+            </button>
+            <div class="transcript-panel hidden" id="transcript-panel">
+              <p class="label">Your transcript</p>
+              <p>Could I just check whether this figure is based on the latest client information?</p>
+              <div class="score-row">
+                <span>Pronunciation 82</span>
+                <span>Naturalness 88</span>
+                <span>Completeness 91</span>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-heading">
+              <h3>Review queue</h3>
+              <button class="text-button" type="button" data-view="library">View all</button>
+            </div>
+            <div class="mini-list">
+              <button class="mini-item" type="button">
+                <span>I’ll double-check that and come back to you shortly.</span>
+                <b>Practising</b>
+              </button>
+              <button class="mini-item" type="button">
+                <span>Could I jump in with one quick point?</span>
+                <b>New</b>
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <div class="view" id="generate-view">
+          <section class="input-panel">
+            <label for="thought-input">Chinese thought</label>
+            <textarea id="thought-input">我不是很确定这个方案是不是最优的，但我觉得我们可以先试一下。</textarea>
+            <button class="primary-button" type="button" id="generate-button">Generate 3 expressions</button>
+          </section>
+
+          <section class="generated-list" id="generated-list">
+            <article class="expression-card">
+              <div class="card-topline">
+                <span>Natural</span>
+                <b>Workplace</b>
+              </div>
+              <h3>I’m not completely sure this is the best approach, but I think it’s worth trialling first.</h3>
+              <p>中文：我不完全确定这是最优方案，但我觉得值得先试一下。</p>
+              <p>Why it works: “worth trialling” sounds natural in NZ/AU workplace English and avoids sounding too direct.</p>
+              <button class="secondary-button save-expression" type="button">Save to Library</button>
+            </article>
+            <article class="expression-card">
+              <div class="card-topline">
+                <span>Advanced</span>
+                <b>Meeting</b>
+              </div>
+              <h3>I’m not fully convinced it’s the optimal option yet, but we could test it and see how it goes.</h3>
+              <p>中文：我还不完全相信这是最优选择，但我们可以测试一下看看效果。</p>
+              <p>Why it works: “not fully convinced” is professional and softer than saying “I disagree”.</p>
+              <button class="secondary-button save-expression" type="button">Save to Library</button>
+            </article>
+            <article class="expression-card">
+              <div class="card-topline">
+                <span>Softer</span>
+                <b>Team chat</b>
+              </div>
+              <h3>It might not be perfect, but I’m happy to give it a go and review the outcome.</h3>
+              <p>中文：它可能不是完美方案，但我愿意先试试，再看结果。</p>
+              <p>Why it works: “give it a go” is conversational and common in New Zealand.</p>
+              <button class="secondary-button save-expression" type="button">Save to Library</button>
+            </article>
+          </section>
+        </div>
+
+        <div class="view" id="library-view">
+          <section class="search-panel">
+            <input id="library-search" type="search" placeholder="Search expressions, tags, or Chinese meaning" />
+            <div class="filter-row">
+              <button class="chip active" type="button">All</button>
+              <button class="chip" type="button">Work Meeting</button>
+              <button class="chip" type="button">Small Talk</button>
+              <button class="chip" type="button">Struggling</button>
+            </div>
+          </section>
+          <section class="library-list" id="library-list"></section>
+        </div>
+
+        <div class="view" id="plan-view">
+          <section class="plan-panel">
+            <p class="eyebrow">Adaptive plan</p>
+            <h3>Current weakness: concise meeting responses</h3>
+            <div class="progress-track"><span style="width: 28%"></span></div>
+            <p>SpeakVault will prioritise clarification, interruptions, and progress updates this week.</p>
+          </section>
+          <section class="day-list">
+            <article class="day-card active-day">
+              <span>Day 4</span>
+              <h3>Ask for clarification</h3>
+              <p>Real task: ask whether a tax figure uses the latest client data.</p>
+            </article>
+            <article class="day-card">
+              <span>Day 5</span>
+              <h3>Interrupt politely</h3>
+              <p>Real task: add one quick point without sounding abrupt.</p>
+            </article>
+            <article class="day-card">
+              <span>Day 6</span>
+              <h3>Explain a delay</h3>
+              <p>Real task: ask for more time while keeping confidence.</p>
+            </article>
+          </section>
+        </div>
+
+        <div class="view" id="profile-view">
+          <section class="profile-panel">
+            <div class="avatar">YK</div>
+            <h3>Tax Accountant · Auckland</h3>
+            <p>Target accent: NZ / AU workplace English</p>
+          </section>
+          <section class="settings-list">
+            <button class="setting-row" type="button">
+              <span>AI voice</span>
+              <b>Selectable</b>
+            </button>
+            <button class="setting-row" type="button">
+              <span>Interface language</span>
+              <b>English</b>
+            </button>
+            <button class="setting-row" type="button">
+              <span>Dark mode</span>
+              <b>On</b>
+            </button>
+            <button class="setting-row" type="button">
+              <span>Login security</span>
+              <b>Email</b>
+            </button>
+          </section>
+        </div>
+
+        <nav class="bottom-nav" aria-label="Primary navigation">
+          <button class="nav-button active" type="button" data-view="practice">
+            <span>◌</span>
+            Practice
+          </button>
+          <button class="nav-button" type="button" data-view="generate">
+            <span>＋</span>
+            Generate
+          </button>
+          <button class="nav-button" type="button" data-view="library">
+            <span>⌕</span>
+            Library
+          </button>
+          <button class="nav-button" type="button" data-view="plan">
+            <span>▣</span>
+            Plan
+          </button>
+          <button class="nav-button" type="button" data-view="profile">
+            <span>◇</span>
+            Profile
+          </button>
+        </nav>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
