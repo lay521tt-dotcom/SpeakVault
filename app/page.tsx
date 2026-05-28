@@ -254,6 +254,35 @@ export default function Home() {
           })
           .slice(0, 3)
       : starterLibrary.slice(0, 2);
+  const focusExpression = reviewItems[0];
+  const masteredCount = library.filter((item) => item.status === "Mastered").length;
+  const planProgress = library.length > 0 ? Math.max(8, Math.round((masteredCount / library.length) * 100)) : 28;
+  const focusPracticeCount = focusExpression ? practicedExpressionCounts[focusExpression.id] ?? 0 : 0;
+  const focusReason =
+    focusExpression?.status === "Struggling"
+      ? "it is marked as struggling"
+      : focusPracticeCount === 0
+        ? "it has not been practised yet"
+        : "it is still in your active queue";
+  const adaptivePlan = focusExpression
+    ? {
+        title: `Current focus: ${focusExpression.category}`,
+        copy: `Prioritising this because ${focusReason}. Start with one target expression, then reuse it in a short workplace answer.`,
+        tasks: [
+          ["Day 4", focusExpression.english, `Real task: say this from memory, then adapt it to a tax-accounting situation.`],
+          ["Day 5", "Clarify the context", `Real task: add one follow-up question before or after the ${focusExpression.category} expression.`],
+          ["Day 6", "Make it longer", "Real task: turn the sentence into a 20-second meeting response with one reason and one next step."],
+        ],
+      }
+    : {
+        title: "Current weakness: concise meeting responses",
+        copy: "SpeakVault will prioritise clarification, interruptions, and progress updates this week.",
+        tasks: [
+          ["Day 4", "Ask for clarification", "Real task: ask whether a tax figure uses the latest client data."],
+          ["Day 5", "Interrupt politely", "Real task: add one quick point without sounding abrupt."],
+          ["Day 6", "Explain a delay", "Real task: ask for more time while keeping confidence."],
+        ],
+      };
 
   function startPractice(expression: Expression) {
     setPracticeExpressionId(expression.id);
@@ -963,18 +992,14 @@ export default function Home() {
           <div className="view active">
             <section className="plan-panel">
               <p className="eyebrow">Adaptive plan</p>
-              <h3>Current weakness: concise meeting responses</h3>
+              <h3>{adaptivePlan.title}</h3>
               <div className="progress-track">
-                <span style={{ width: "28%" }} />
+                <span style={{ width: `${planProgress}%` }} />
               </div>
-              <p>SpeakVault will prioritise clarification, interruptions, and progress updates this week.</p>
+              <p>{adaptivePlan.copy}</p>
             </section>
             <section className="day-list">
-              {[
-                ["Day 4", "Ask for clarification", "Real task: ask whether a tax figure uses the latest client data."],
-                ["Day 5", "Interrupt politely", "Real task: add one quick point without sounding abrupt."],
-                ["Day 6", "Explain a delay", "Real task: ask for more time while keeping confidence."],
-              ].map(([day, title, copy], index) => (
+              {adaptivePlan.tasks.map(([day, title, copy], index) => (
                 <article className={`day-card ${index === 0 ? "active-day" : ""}`} key={day}>
                   <span>{day}</span>
                   <h3>{title}</h3>
