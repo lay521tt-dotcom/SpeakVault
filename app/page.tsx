@@ -1,7 +1,7 @@
 "use client";
 
 import type { User } from "@supabase/supabase-js";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Expression, ExpressionInsert, MasteryStatus, PracticeSessionWithExpression } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
 
@@ -16,6 +16,35 @@ type EditExpressionForm = {
   tags: string;
   alternatives: string;
 };
+type SpeechRecognitionAlternativeLike = {
+  transcript: string;
+};
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  0: SpeechRecognitionAlternativeLike;
+};
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: {
+    length: number;
+    item(index: number): SpeechRecognitionResultLike;
+    [index: number]: SpeechRecognitionResultLike;
+  };
+};
+type SpeechRecognitionErrorLike = {
+  error: string;
+};
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 const starterLibrary: Expression[] = [
   {
@@ -112,6 +141,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [spokenTranscript, setSpokenTranscript] = useState("");
   const [thought, setThought] = useState("我不是很确定这个方案是不是最优的，但我觉得我们可以先试一下。");
   const [generatedExpressions, setGeneratedExpressions] = useState<Omit<ExpressionInsert, "status">[]>(generatedSamples);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -135,6 +165,8 @@ export default function Home() {
     tags: "",
     alternatives: "",
   });
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const transcriptRef = useRef("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -149,6 +181,12 @@ export default function Home() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+    };
   }, []);
 
   useEffect(() => {
@@ -288,7 +326,76 @@ export default function Home() {
     setPracticeExpressionId(expression.id);
     setShowTranscript(false);
     setIsRecording(false);
+    setSpokenTranscript("");
+    transcriptRef.current = "";
     setActiveView("practice");
+  }
+
+  function getSpeechRecognition() {
+    if (typeof window === "undefined") return null;
+
+    const speechWindow = window as Window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+
+    return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
+  }
+
+  function startSpeechPractice() {
+    if (!user) return;
+
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      setAuthMessage("Speech recognition is not available in this browser. Try Chrome on desktop.");
+      return;
+    }
+
+    recognitionRef.current?.stop();
+    const recognition = new Recognition();
+    recognition.lang = "en-NZ";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    transcriptRef.current = "";
+    setSpokenTranscript("");
+    setShowTranscript(false);
+    setAuthMessage("");
+    setIsRecording(true);
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from({ length: event.results.length }, (_, index) => {
+        const result = event.results.item(index);
+        return result[0]?.transcript ?? "";
+      })
+        .join(" ")
+        .trim();
+
+      transcriptRef.current = transcript;
+      setSpokenTranscript(transcript);
+    };
+    recognition.onerror = (event) => {
+      setAuthMessage(`Speech recognition error: ${event.error}`);
+      setIsRecording(false);
+    };
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }
+
+  function stopSpeechPractice() {
+    recognitionRef.current?.stop();
+    setIsRecording(false);
+    const transcript = transcriptRef.current.trim();
+
+    if (!transcript) {
+      setAuthMessage("No speech was captured yet. Try speaking once, then stop and save.");
+      return;
+    }
+
+    savePracticeSession(transcript);
   }
 
   function beginEditExpression(expression: Expression) {
@@ -394,7 +501,7 @@ export default function Home() {
     setUpdatingExpressionId("");
   }
 
-  async function savePracticeSession() {
+  async function savePracticeSession(transcript = spokenTranscript.trim()) {
     if (!user) return;
 
     setShowTranscript(true);
@@ -413,7 +520,7 @@ export default function Home() {
       .insert({
         user_id: user.id,
         expression_id: isSavedExpression ? practiceExpression.id : null,
-        transcript: practiceExpression.english,
+        transcript: transcript || practiceExpression.english,
         ...scores,
       })
       .select()
@@ -449,6 +556,7 @@ export default function Home() {
 
     setIsRecording(false);
     setIsSavingPractice(false);
+    setSpokenTranscript(transcript || practiceExpression.english);
   }
 
   async function deleteExpression(expression: Expression) {
@@ -635,8 +743,11 @@ export default function Home() {
                 className="pulse-button"
                 type="button"
                 onClick={() => {
+                  recognitionRef.current?.stop();
                   setShowTranscript(false);
                   setIsRecording(false);
+                  setSpokenTranscript("");
+                  transcriptRef.current = "";
                 }}
               >
                 Start
@@ -668,18 +779,21 @@ export default function Home() {
                 className={`record-button ${isRecording ? "recording" : ""}`}
                 type="button"
                 disabled={isSavingPractice}
-                onClick={() => {
-                  setIsRecording((current) => !current);
-                  savePracticeSession();
-                }}
+                onClick={isRecording ? stopSpeechPractice : startSpeechPractice}
               >
                 <span />
-                {isSavingPractice ? "Saving..." : isRecording ? "Recording..." : showTranscript ? "Record again" : "Hold to speak"}
+                {isSavingPractice ? "Saving..." : isRecording ? "Stop and save" : showTranscript ? "Record again" : "Start speaking"}
               </button>
+              {isRecording && spokenTranscript && (
+                <div className="live-transcript">
+                  <p className="label">Live transcript</p>
+                  <p>{spokenTranscript}</p>
+                </div>
+              )}
               {showTranscript && (
                 <div className="transcript-panel">
                   <p className="label">Your transcript</p>
-                  <p>{practiceExpression.english}</p>
+                  <p>{spokenTranscript || practiceExpression.english}</p>
                   <div className="score-row">
                     <span>Pronunciation 82</span>
                     <span>Naturalness 88</span>

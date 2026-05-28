@@ -462,6 +462,7 @@ textarea {
   }
 }
 
+.live-transcript,
 .transcript-panel {
   padding: 0.85rem;
   border-radius: 8px;
@@ -469,6 +470,12 @@ textarea {
   background: var(--accent-soft);
 }
 
+.live-transcript {
+  border-color: var(--line);
+  background: var(--panel);
+}
+
+.live-transcript p,
 .transcript-panel p {
   margin: 0.45rem 0;
   line-height: 1.45;
