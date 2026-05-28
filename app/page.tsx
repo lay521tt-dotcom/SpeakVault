@@ -379,6 +379,7 @@ export default function Home() {
       }
     }
 
+    setIsRecording(false);
     setIsSavingPractice(false);
   }
 
@@ -623,6 +624,46 @@ export default function Home() {
               <div className="target-expression">
                 <p className="label">Target expression</p>
                 <p>{practiceExpression.english}</p>
+              </div>
+            </section>
+
+            <section>
+              <div className="section-heading">
+                <h3>Recent practice</h3>
+                <span className="subtle-count">{practiceSessions.length} saved</span>
+              </div>
+              <div className="session-list">
+                {practiceSessions.length === 0 ? (
+                  <article className="session-card">
+                    <p>No practice sessions yet. Record once to start your history.</p>
+                  </article>
+                ) : (
+                  practiceSessions.slice(0, 3).map((session) => (
+                    <article className="session-card" key={session.id}>
+                      <div className="card-topline">
+                        <span>
+                          {new Intl.DateTimeFormat("en-NZ", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          }).format(new Date(session.created_at))}
+                        </span>
+                        <b>
+                          {Math.round(
+                            (session.pronunciation_score + session.naturalness_score + session.completeness_score) / 3,
+                          )}
+                        </b>
+                      </div>
+                      <p>{session.transcript}</p>
+                      <div className="score-row">
+                        <span>P {session.pronunciation_score}</span>
+                        <span>N {session.naturalness_score}</span>
+                        <span>C {session.completeness_score}</span>
+                      </div>
+                    </article>
+                  ))
+                )}
               </div>
             </section>
 
