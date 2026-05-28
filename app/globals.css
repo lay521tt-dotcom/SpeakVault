@@ -623,6 +623,28 @@ textarea {
   font-weight: 800;
 }
 
+.edit-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.edit-form textarea {
+  min-height: 5.2rem;
+}
+
+.two-column-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.detail-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .status-grid {
   display: flex;
   flex-wrap: wrap;

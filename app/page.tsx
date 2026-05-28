@@ -7,6 +7,15 @@ import { supabase } from "../lib/supabase";
 
 type ViewName = "practice" | "generate" | "library" | "plan" | "profile";
 type AuthMode = "sign-in" | "sign-up";
+type EditExpressionForm = {
+  english: string;
+  chinese: string;
+  category: string;
+  difficulty: string;
+  note: string;
+  tags: string;
+  alternatives: string;
+};
 
 const starterLibrary: Expression[] = [
   {
@@ -113,6 +122,16 @@ export default function Home() {
   const [savingExpression, setSavingExpression] = useState("");
   const [selectedExpressionId, setSelectedExpressionId] = useState("");
   const [updatingExpressionId, setUpdatingExpressionId] = useState("");
+  const [isEditingExpression, setIsEditingExpression] = useState(false);
+  const [editExpressionForm, setEditExpressionForm] = useState<EditExpressionForm>({
+    english: "",
+    chinese: "",
+    category: "",
+    difficulty: "",
+    note: "",
+    tags: "",
+    alternatives: "",
+  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -169,12 +188,40 @@ export default function Home() {
     } else {
       setLibrary(data ?? []);
       setSelectedExpressionId((current) => (current && data?.some((item) => item.id === current) ? current : ""));
+      setIsEditingExpression(false);
     }
 
     setIsLibraryLoading(false);
   }
 
   const selectedExpression = library.find((item) => item.id === selectedExpressionId) ?? null;
+
+  function beginEditExpression(expression: Expression) {
+    setEditExpressionForm({
+      english: expression.english,
+      chinese: expression.chinese,
+      category: expression.category,
+      difficulty: expression.difficulty,
+      note: expression.note,
+      tags: expression.tags.join("\n"),
+      alternatives: expression.alternatives.join("\n"),
+    });
+    setIsEditingExpression(true);
+  }
+
+  function parseLines(value: string) {
+    return value
+      .split(/\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function setEditField(field: keyof EditExpressionForm, value: string) {
+    setEditExpressionForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -262,6 +309,43 @@ export default function Home() {
     } else {
       setLibrary((current) => current.filter((item) => item.id !== expression.id));
       setSelectedExpressionId("");
+      setIsEditingExpression(false);
+    }
+
+    setUpdatingExpressionId("");
+  }
+
+  async function saveExpressionEdits(expression: Expression) {
+    const nextExpression = {
+      english: editExpressionForm.english.trim(),
+      chinese: editExpressionForm.chinese.trim(),
+      category: editExpressionForm.category.trim() || "Work Meeting",
+      difficulty: editExpressionForm.difficulty.trim() || "Natural",
+      note: editExpressionForm.note.trim(),
+      tags: parseLines(editExpressionForm.tags),
+      alternatives: parseLines(editExpressionForm.alternatives),
+    };
+
+    if (!nextExpression.english || !nextExpression.chinese) {
+      setAuthMessage("English and Chinese fields are required.");
+      return;
+    }
+
+    setUpdatingExpressionId(expression.id);
+    setAuthMessage("");
+
+    const { data, error } = await supabase
+      .from("expressions")
+      .update(nextExpression)
+      .eq("id", expression.id)
+      .select()
+      .single();
+
+    if (error) {
+      setAuthMessage(`Could not save edits: ${error.message}`);
+    } else if (data) {
+      setLibrary((current) => current.map((item) => (item.id === data.id ? data : item)));
+      setIsEditingExpression(false);
     }
 
     setUpdatingExpressionId("");
@@ -555,7 +639,10 @@ export default function Home() {
                     className={`library-card library-card-button ${selectedExpressionId === item.id ? "selected" : ""}`}
                     key={item.id}
                     type="button"
-                    onClick={() => setSelectedExpressionId(item.id)}
+                    onClick={() => {
+                      setSelectedExpressionId(item.id);
+                      setIsEditingExpression(false);
+                    }}
                   >
                     <div className="card-topline">
                       <span>
@@ -590,52 +677,110 @@ export default function Home() {
                     </span>
                     <b>{selectedExpression.status}</b>
                   </div>
-                  <h3>{selectedExpression.english}</h3>
-                  <p>中文：{selectedExpression.chinese}</p>
-                  <div className="detail-block">
-                    <span>Why it works</span>
-                    <p>{selectedExpression.note}</p>
-                  </div>
-                  <div className="detail-block">
-                    <span>Alternatives</span>
-                    <ul>
-                      {selectedExpression.alternatives.map((alternative) => (
-                        <li key={alternative}>{alternative}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="detail-block">
-                    <span>Tags</span>
-                    <div className="tag-row">
-                      {selectedExpression.tags.map((tag) => (
-                        <span key={tag}>{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="detail-block">
-                    <span>Mastery status</span>
-                    <div className="status-grid">
-                      {masteryStatuses.map((status) => (
+                  {isEditingExpression ? (
+                    <div className="edit-form">
+                      <label>
+                        English
+                        <textarea value={editExpressionForm.english} onChange={(event) => setEditField("english", event.target.value)} />
+                      </label>
+                      <label>
+                        Chinese
+                        <textarea value={editExpressionForm.chinese} onChange={(event) => setEditField("chinese", event.target.value)} />
+                      </label>
+                      <div className="two-column-fields">
+                        <label>
+                          Category
+                          <input value={editExpressionForm.category} onChange={(event) => setEditField("category", event.target.value)} />
+                        </label>
+                        <label>
+                          Difficulty
+                          <input value={editExpressionForm.difficulty} onChange={(event) => setEditField("difficulty", event.target.value)} />
+                        </label>
+                      </div>
+                      <label>
+                        Why it works
+                        <textarea value={editExpressionForm.note} onChange={(event) => setEditField("note", event.target.value)} />
+                      </label>
+                      <label>
+                        Alternatives
+                        <textarea
+                          value={editExpressionForm.alternatives}
+                          onChange={(event) => setEditField("alternatives", event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Tags
+                        <textarea value={editExpressionForm.tags} onChange={(event) => setEditField("tags", event.target.value)} />
+                      </label>
+                      <div className="detail-actions">
                         <button
-                          className={`chip ${selectedExpression.status === status ? "active" : ""}`}
-                          key={status}
+                          className="secondary-button"
                           type="button"
                           disabled={updatingExpressionId === selectedExpression.id}
-                          onClick={() => updateExpressionStatus(selectedExpression, status)}
+                          onClick={() => saveExpressionEdits(selectedExpression)}
                         >
-                          {status}
+                          {updatingExpressionId === selectedExpression.id ? "Saving..." : "Save changes"}
                         </button>
-                      ))}
+                        <button className="text-button" type="button" onClick={() => setIsEditingExpression(false)}>
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    className="danger-button"
-                    type="button"
-                    disabled={updatingExpressionId === selectedExpression.id}
-                    onClick={() => deleteExpression(selectedExpression)}
-                  >
-                    {updatingExpressionId === selectedExpression.id ? "Updating..." : "Delete expression"}
-                  </button>
+                  ) : (
+                    <>
+                      <h3>{selectedExpression.english}</h3>
+                      <p>中文：{selectedExpression.chinese}</p>
+                      <div className="detail-block">
+                        <span>Why it works</span>
+                        <p>{selectedExpression.note}</p>
+                      </div>
+                      <div className="detail-block">
+                        <span>Alternatives</span>
+                        <ul>
+                          {selectedExpression.alternatives.map((alternative) => (
+                            <li key={alternative}>{alternative}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="detail-block">
+                        <span>Tags</span>
+                        <div className="tag-row">
+                          {selectedExpression.tags.map((tag) => (
+                            <span key={tag}>{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="detail-block">
+                        <span>Mastery status</span>
+                        <div className="status-grid">
+                          {masteryStatuses.map((status) => (
+                            <button
+                              className={`chip ${selectedExpression.status === status ? "active" : ""}`}
+                              key={status}
+                              type="button"
+                              disabled={updatingExpressionId === selectedExpression.id}
+                              onClick={() => updateExpressionStatus(selectedExpression, status)}
+                            >
+                              {status}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="detail-actions">
+                        <button className="secondary-button" type="button" onClick={() => beginEditExpression(selectedExpression)}>
+                          Edit expression
+                        </button>
+                        <button
+                          className="danger-button"
+                          type="button"
+                          disabled={updatingExpressionId === selectedExpression.id}
+                          onClick={() => deleteExpression(selectedExpression)}
+                        >
+                          {updatingExpressionId === selectedExpression.id ? "Updating..." : "Delete expression"}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </article>
               </section>
             )}
