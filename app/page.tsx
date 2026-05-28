@@ -207,7 +207,9 @@ export default function Home() {
       .limit(30);
 
     if (error) {
-      setAuthMessage(`Could not load practice history: ${error.message}`);
+      if (!error.message.includes("practice_sessions")) {
+        setAuthMessage(`Could not load practice history: ${error.message}`);
+      }
       setPracticeSessions([]);
     } else {
       setPracticeSessions(data ?? []);
@@ -364,7 +366,11 @@ export default function Home() {
       .single();
 
     if (error) {
-      setAuthMessage(`Could not save practice session: ${error.message}`);
+      if (error.message.includes("practice_sessions")) {
+        setAuthMessage("Practice history is not set up yet. Run supabase/practice_sessions.sql in Supabase, then try again.");
+      } else {
+        setAuthMessage(`Could not save practice session: ${error.message}`);
+      }
     } else if (data) {
       setPracticeSessions((current) => [data, ...current]);
 
