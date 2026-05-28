@@ -17,6 +17,17 @@ export type Expression = {
 
 export type ExpressionInsert = Omit<Expression, "id" | "user_id" | "created_at" | "updated_at">;
 
+export type PracticeSession = {
+  id: string;
+  user_id: string;
+  expression_id: string | null;
+  transcript: string;
+  pronunciation_score: number;
+  naturalness_score: number;
+  completeness_score: number;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -46,6 +57,26 @@ export type Database = {
           note: string;
           alternatives: string[];
           updated_at: string;
+        }>;
+        Relationships: [];
+      };
+      practice_sessions: {
+        Row: PracticeSession;
+        Insert: {
+          id?: string;
+          user_id?: string;
+          expression_id?: string | null;
+          transcript: string;
+          pronunciation_score: number;
+          naturalness_score: number;
+          completeness_score: number;
+          created_at?: string;
+        };
+        Update: Partial<{
+          transcript: string;
+          pronunciation_score: number;
+          naturalness_score: number;
+          completeness_score: number;
         }>;
         Relationships: [];
       };

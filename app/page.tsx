@@ -2,7 +2,7 @@
 
 import type { User } from "@supabase/supabase-js";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { Expression, ExpressionInsert, MasteryStatus } from "../lib/database.types";
+import type { Expression, ExpressionInsert, MasteryStatus, PracticeSession } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
 
 type ViewName = "practice" | "generate" | "library" | "plan" | "profile";
@@ -117,6 +117,7 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [library, setLibrary] = useState<Expression[]>([]);
+  const [practiceSessions, setPracticeSessions] = useState<PracticeSession[]>([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [savingExpression, setSavingExpression] = useState("");
@@ -124,6 +125,7 @@ export default function Home() {
   const [practiceExpressionId, setPracticeExpressionId] = useState("");
   const [updatingExpressionId, setUpdatingExpressionId] = useState("");
   const [isEditingExpression, setIsEditingExpression] = useState(false);
+  const [isSavingPractice, setIsSavingPractice] = useState(false);
   const [editExpressionForm, setEditExpressionForm] = useState<EditExpressionForm>({
     english: "",
     chinese: "",
@@ -152,11 +154,13 @@ export default function Home() {
   useEffect(() => {
     if (!user) {
       setLibrary([]);
+      setPracticeSessions([]);
       setSelectedExpressionId("");
       return;
     }
 
     loadExpressions();
+    loadPracticeSessions();
   }, [user]);
 
   const filteredLibrary = useMemo(() => {
@@ -195,8 +199,34 @@ export default function Home() {
     setIsLibraryLoading(false);
   }
 
+  async function loadPracticeSessions() {
+    const { data, error } = await supabase
+      .from("practice_sessions")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (error) {
+      setAuthMessage(`Could not load practice history: ${error.message}`);
+      setPracticeSessions([]);
+    } else {
+      setPracticeSessions(data ?? []);
+    }
+  }
+
   const selectedExpression = library.find((item) => item.id === selectedExpressionId) ?? null;
   const practiceExpression = library.find((item) => item.id === practiceExpressionId) ?? starterLibrary[0];
+  const todaysPracticeCount = practiceSessions.filter(
+    (session) => new Date(session.created_at).toDateString() === new Date().toDateString(),
+  ).length;
+  const lastPracticeTime = practiceSessions[0]?.created_at
+    ? new Intl.DateTimeFormat("en-NZ", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(practiceSessions[0].created_at))
+    : "Not yet";
 
   function startPractice(expression: Expression) {
     setPracticeExpressionId(expression.id);
@@ -263,6 +293,7 @@ export default function Home() {
     await supabase.auth.signOut();
     setUser(null);
     setLibrary([]);
+    setPracticeSessions([]);
     setActiveView("practice");
   }
 
@@ -305,6 +336,44 @@ export default function Home() {
     }
 
     setUpdatingExpressionId("");
+  }
+
+  async function savePracticeSession() {
+    if (!user) return;
+
+    setShowTranscript(true);
+    setIsSavingPractice(true);
+    setAuthMessage("");
+
+    const isSavedExpression = practiceExpression.user_id === user.id;
+    const scores = {
+      pronunciation_score: 82,
+      naturalness_score: 88,
+      completeness_score: 91,
+    };
+
+    const { data, error } = await supabase
+      .from("practice_sessions")
+      .insert({
+        user_id: user.id,
+        expression_id: isSavedExpression ? practiceExpression.id : null,
+        transcript: practiceExpression.english,
+        ...scores,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      setAuthMessage(`Could not save practice session: ${error.message}`);
+    } else if (data) {
+      setPracticeSessions((current) => [data, ...current]);
+
+      if (isSavedExpression && practiceExpression.status !== "Practising") {
+        await updateExpressionStatus(practiceExpression, "Practising");
+      }
+    }
+
+    setIsSavingPractice(false);
   }
 
   async function deleteExpression(expression: Expression) {
@@ -503,16 +572,16 @@ export default function Home() {
 
             <section className="metric-grid" aria-label="Daily metrics">
               <article>
-                <strong>10</strong>
-                <span>min learn</span>
+                <strong>{todaysPracticeCount}</strong>
+                <span>today</span>
               </article>
               <article>
-                <strong>10</strong>
-                <span>min speak</span>
+                <strong>{practiceSessions.length}</strong>
+                <span>recent</span>
               </article>
               <article>
-                <strong>10</strong>
-                <span>min review</span>
+                <strong className="compact-stat">{lastPracticeTime}</strong>
+                <span>last</span>
               </article>
             </section>
 
@@ -525,13 +594,14 @@ export default function Home() {
               <button
                 className={`record-button ${isRecording ? "recording" : ""}`}
                 type="button"
+                disabled={isSavingPractice}
                 onClick={() => {
                   setIsRecording((current) => !current);
-                  setShowTranscript(true);
+                  savePracticeSession();
                 }}
               >
                 <span />
-                {isRecording ? "Recording..." : showTranscript ? "Record again" : "Hold to speak"}
+                {isSavingPractice ? "Saving..." : isRecording ? "Recording..." : showTranscript ? "Record again" : "Hold to speak"}
               </button>
               {showTranscript && (
                 <div className="transcript-panel">

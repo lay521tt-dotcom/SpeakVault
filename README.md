@@ -54,6 +54,8 @@ This creates:
 - indexes for library queries
 - `updated_at` trigger
 
+Then run [supabase/practice_sessions.sql](supabase/practice_sessions.sql) to enable practice history.
+
 ## Verification
 
 ```bash

@@ -388,6 +388,14 @@ textarea {
   font-size: 1.4rem;
 }
 
+.metric-grid .compact-stat {
+  font-size: 0.86rem;
+  line-height: 1.25;
+  min-height: 1.75rem;
+  display: flex;
+  align-items: center;
+}
+
 .metric-grid span,
 .card-topline,
 .score-row {
