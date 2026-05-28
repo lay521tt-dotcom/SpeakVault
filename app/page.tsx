@@ -16,6 +16,14 @@ type EditExpressionForm = {
   tags: string;
   alternatives: string;
 };
+type PracticeFeedback = {
+  pronunciation_score: number;
+  naturalness_score: number;
+  completeness_score: number;
+  summary: string;
+  better_version: string;
+  next_step: string;
+};
 type SpeechRecognitionAlternativeLike = {
   transcript: string;
 };
@@ -143,6 +151,7 @@ export default function Home() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [spokenTranscript, setSpokenTranscript] = useState("");
   const [practiceVoiceMessage, setPracticeVoiceMessage] = useState("");
+  const [practiceFeedback, setPracticeFeedback] = useState<PracticeFeedback | null>(null);
   const [thought, setThought] = useState("我不是很确定这个方案是不是最优的，但我觉得我们可以先试一下。");
   const [generatedExpressions, setGeneratedExpressions] = useState<Omit<ExpressionInsert, "status">[]>(generatedSamples);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -329,6 +338,7 @@ export default function Home() {
     setIsRecording(false);
     setSpokenTranscript("");
     setPracticeVoiceMessage("");
+    setPracticeFeedback(null);
     transcriptRef.current = "";
     setActiveView("practice");
   }
@@ -336,6 +346,10 @@ export default function Home() {
   function showVoiceIssue(message: string) {
     setPracticeVoiceMessage(message);
     setAuthMessage(message);
+  }
+
+  function isPracticeFeedback(result: PracticeFeedback | { error?: string }): result is PracticeFeedback {
+    return "pronunciation_score" in result && "naturalness_score" in result && "completeness_score" in result;
   }
 
   function getSpeechRecognition() {
@@ -536,21 +550,54 @@ export default function Home() {
     setShowTranscript(true);
     setIsSavingPractice(true);
     setAuthMessage("");
+    setPracticeFeedback(null);
 
     const isSavedExpression = practiceExpression.user_id === user.id;
-    const scores = {
+    let feedbackWarning = "";
+    let feedback: PracticeFeedback = {
       pronunciation_score: 82,
       naturalness_score: 88,
       completeness_score: 91,
+      summary: "Saved with fallback scores because AI feedback was not available.",
+      better_version: practiceExpression.english,
+      next_step: "Try the sentence again and compare it with the target expression.",
     };
+    const savedTranscript = transcript || practiceExpression.english;
+
+    try {
+      const response = await fetch("/api/evaluate-practice", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          transcript: savedTranscript,
+          targetExpression: practiceExpression.english,
+          chinesePrompt: practiceExpression.chinese,
+        }),
+      });
+      const result = (await response.json()) as PracticeFeedback | { error?: string };
+
+      if (!response.ok || !isPracticeFeedback(result)) {
+        throw new Error("error" in result ? result.error : "Could not evaluate practice.");
+      }
+
+      feedback = result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not evaluate practice.";
+      feedbackWarning = `Saved with fallback scores. AI feedback unavailable: ${message}`;
+      setPracticeVoiceMessage(feedbackWarning);
+    }
 
     const { data, error } = await supabase
       .from("practice_sessions")
       .insert({
         user_id: user.id,
         expression_id: isSavedExpression ? practiceExpression.id : null,
-        transcript: transcript || practiceExpression.english,
-        ...scores,
+        transcript: savedTranscript,
+        pronunciation_score: feedback.pronunciation_score,
+        naturalness_score: feedback.naturalness_score,
+        completeness_score: feedback.completeness_score,
       })
       .select()
       .single();
@@ -585,8 +632,11 @@ export default function Home() {
 
     setIsRecording(false);
     setIsSavingPractice(false);
-    setSpokenTranscript(transcript || practiceExpression.english);
-    setPracticeVoiceMessage("");
+    setSpokenTranscript(savedTranscript);
+    setPracticeFeedback(feedback);
+    if (!feedbackWarning) {
+      setPracticeVoiceMessage("");
+    }
   }
 
   async function deleteExpression(expression: Expression) {
@@ -841,10 +891,21 @@ export default function Home() {
                   <p className="label">Your transcript</p>
                   <p>{spokenTranscript || practiceExpression.english}</p>
                   <div className="score-row">
-                    <span>Pronunciation 82</span>
-                    <span>Naturalness 88</span>
-                    <span>Completeness 91</span>
+                    <span>Pronunciation {practiceFeedback?.pronunciation_score ?? 82}</span>
+                    <span>Naturalness {practiceFeedback?.naturalness_score ?? 88}</span>
+                    <span>Completeness {practiceFeedback?.completeness_score ?? 91}</span>
                   </div>
+                  {practiceFeedback && (
+                    <div className="feedback-notes">
+                      <p>{practiceFeedback.summary}</p>
+                      <p>
+                        <b>Better:</b> {practiceFeedback.better_version}
+                      </p>
+                      <p>
+                        <b>Next:</b> {practiceFeedback.next_step}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="target-expression">

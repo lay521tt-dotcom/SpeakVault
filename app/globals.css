@@ -512,6 +512,22 @@ textarea {
   line-height: 1.45;
 }
 
+.feedback-notes {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #c9dfda;
+}
+
+.feedback-notes p {
+  margin: 0;
+}
+
+.feedback-notes b {
+  color: var(--text);
+}
+
 .target-expression {
   padding: 0.85rem;
   border-radius: 8px;
