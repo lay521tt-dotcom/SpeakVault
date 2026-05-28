@@ -2,7 +2,7 @@
 
 import type { User } from "@supabase/supabase-js";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { Expression, ExpressionInsert, MasteryStatus, PracticeSession } from "../lib/database.types";
+import type { Expression, ExpressionInsert, MasteryStatus, PracticeSessionWithExpression } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
 
 type ViewName = "practice" | "generate" | "library" | "plan" | "profile";
@@ -117,7 +117,7 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [library, setLibrary] = useState<Expression[]>([]);
-  const [practiceSessions, setPracticeSessions] = useState<PracticeSession[]>([]);
+  const [practiceSessions, setPracticeSessions] = useState<PracticeSessionWithExpression[]>([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [savingExpression, setSavingExpression] = useState("");
@@ -202,7 +202,7 @@ export default function Home() {
   async function loadPracticeSessions() {
     const { data, error } = await supabase
       .from("practice_sessions")
-      .select("*")
+      .select("*, expressions(id, english, chinese, category, difficulty)")
       .order("created_at", { ascending: false })
       .limit(30);
 
@@ -212,7 +212,7 @@ export default function Home() {
       }
       setPracticeSessions([]);
     } else {
-      setPracticeSessions(data ?? []);
+      setPracticeSessions((data ?? []) as PracticeSessionWithExpression[]);
     }
   }
 
@@ -372,7 +372,21 @@ export default function Home() {
         setAuthMessage(`Could not save practice session: ${error.message}`);
       }
     } else if (data) {
-      setPracticeSessions((current) => [data, ...current]);
+      setPracticeSessions((current) => [
+        {
+          ...data,
+          expressions: isSavedExpression
+            ? {
+                id: practiceExpression.id,
+                english: practiceExpression.english,
+                chinese: practiceExpression.chinese,
+                category: practiceExpression.category,
+                difficulty: practiceExpression.difficulty,
+              }
+            : null,
+        },
+        ...current,
+      ]);
 
       if (isSavedExpression && practiceExpression.status !== "Practising") {
         await updateExpressionStatus(practiceExpression, "Practising");
@@ -642,6 +656,7 @@ export default function Home() {
                     <article className="session-card" key={session.id}>
                       <div className="card-topline">
                         <span>
+                          {session.expressions?.category ?? "Standalone"} ·{" "}
                           {new Intl.DateTimeFormat("en-NZ", {
                             month: "short",
                             day: "numeric",
@@ -655,6 +670,7 @@ export default function Home() {
                           )}
                         </b>
                       </div>
+                      {session.expressions && <p className="session-source">Prompt: {session.expressions.chinese}</p>}
                       <p>{session.transcript}</p>
                       <div className="score-row">
                         <span>P {session.pronunciation_score}</span>

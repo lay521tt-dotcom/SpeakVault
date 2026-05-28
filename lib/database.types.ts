@@ -28,6 +28,10 @@ export type PracticeSession = {
   created_at: string;
 };
 
+export type PracticeSessionWithExpression = PracticeSession & {
+  expressions: Pick<Expression, "id" | "english" | "chinese" | "category" | "difficulty"> | null;
+};
+
 export type Database = {
   public: {
     Tables: {
