@@ -466,6 +466,26 @@ textarea {
   line-height: 1.45;
 }
 
+.manual-transcript {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem;
+  border-radius: 8px;
+  border: 1px dashed var(--line);
+  background: var(--panel);
+}
+
+.manual-transcript label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.manual-transcript textarea {
+  min-height: 5.5rem;
+  font-size: 0.95rem;
+}
+
 @keyframes blink {
   50% {
     opacity: 0.25;

@@ -416,6 +416,17 @@ export default function Home() {
     savePracticeSession(transcript);
   }
 
+  function saveTypedTranscript() {
+    const transcript = spokenTranscript.trim();
+
+    if (!transcript) {
+      showVoiceIssue("Type what you said, then save it to your practice history.");
+      return;
+    }
+
+    savePracticeSession(transcript);
+  }
+
   function beginEditExpression(expression: Expression) {
     setEditExpressionForm({
       english: expression.english,
@@ -805,6 +816,20 @@ export default function Home() {
                 {isSavingPractice ? "Saving..." : isRecording ? "Stop and save" : showTranscript ? "Record again" : "Start speaking"}
               </button>
               {practiceVoiceMessage && <p className="practice-message">{practiceVoiceMessage}</p>}
+              {!isRecording && (
+                <div className="manual-transcript">
+                  <label htmlFor="manual-transcript">Typed transcript</label>
+                  <textarea
+                    id="manual-transcript"
+                    value={spokenTranscript}
+                    onChange={(event) => setSpokenTranscript(event.target.value)}
+                    placeholder="Type what you said if the microphone is blocked."
+                  />
+                  <button className="secondary-button" type="button" disabled={isSavingPractice} onClick={saveTypedTranscript}>
+                    Save typed transcript
+                  </button>
+                </div>
+              )}
               {isRecording && spokenTranscript && (
                 <div className="live-transcript">
                   <p className="label">Live transcript</p>
