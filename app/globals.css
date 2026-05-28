@@ -558,6 +558,17 @@ textarea {
   background: var(--panel);
 }
 
+.library-card-button {
+  width: 100%;
+  color: var(--text);
+  text-align: left;
+}
+
+.library-card-button.selected {
+  border-color: #b8d3ce;
+  background: var(--accent-soft);
+}
+
 .library-card h3 {
   margin: 0 0 0.55rem;
   line-height: 1.32;
@@ -569,6 +580,68 @@ textarea {
   color: var(--muted);
   line-height: 1.45;
   font-size: 0.88rem;
+}
+
+.detail-panel {
+  margin-top: 1rem;
+}
+
+.detail-card {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 10px 28px var(--shadow);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.detail-card h3 {
+  margin: 0;
+  line-height: 1.32;
+}
+
+.detail-card p,
+.detail-card li {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 0.9rem;
+}
+
+.detail-card p,
+.detail-card ul {
+  margin: 0.35rem 0 0;
+}
+
+.detail-card ul {
+  padding-left: 1.2rem;
+}
+
+.detail-block > span {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.danger-button {
+  min-height: 2.8rem;
+  border: 1px solid #e7d8c6;
+  border-radius: 8px;
+  background: #fff8ef;
+  color: var(--warm);
+  font-weight: 800;
+}
+
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .tag-row {

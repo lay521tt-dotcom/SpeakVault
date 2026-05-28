@@ -2,7 +2,7 @@
 
 import type { User } from "@supabase/supabase-js";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { Expression, ExpressionInsert } from "../lib/database.types";
+import type { Expression, ExpressionInsert, MasteryStatus } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
 
 type ViewName = "practice" | "generate" | "library" | "plan" | "profile";
@@ -91,6 +91,8 @@ const viewTitles: Record<ViewName, string> = {
   profile: "Profile",
 };
 
+const masteryStatuses: MasteryStatus[] = ["New", "Practising", "Struggling", "Mastered"];
+
 export default function Home() {
   const [activeView, setActiveView] = useState<ViewName>("practice");
   const [authMode, setAuthMode] = useState<AuthMode>("sign-in");
@@ -109,6 +111,8 @@ export default function Home() {
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [savingExpression, setSavingExpression] = useState("");
+  const [selectedExpressionId, setSelectedExpressionId] = useState("");
+  const [updatingExpressionId, setUpdatingExpressionId] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -128,6 +132,7 @@ export default function Home() {
   useEffect(() => {
     if (!user) {
       setLibrary([]);
+      setSelectedExpressionId("");
       return;
     }
 
@@ -163,10 +168,13 @@ export default function Home() {
       setLibrary([]);
     } else {
       setLibrary(data ?? []);
+      setSelectedExpressionId((current) => (current && data?.some((item) => item.id === current) ? current : ""));
     }
 
     setIsLibraryLoading(false);
   }
+
+  const selectedExpression = library.find((item) => item.id === selectedExpressionId) ?? null;
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -226,6 +234,37 @@ export default function Home() {
     }
 
     setSavingExpression("");
+  }
+
+  async function updateExpressionStatus(expression: Expression, status: MasteryStatus) {
+    setUpdatingExpressionId(expression.id);
+    setAuthMessage("");
+
+    const { data, error } = await supabase.from("expressions").update({ status }).eq("id", expression.id).select().single();
+
+    if (error) {
+      setAuthMessage(`Could not update expression: ${error.message}`);
+    } else if (data) {
+      setLibrary((current) => current.map((item) => (item.id === data.id ? data : item)));
+    }
+
+    setUpdatingExpressionId("");
+  }
+
+  async function deleteExpression(expression: Expression) {
+    setUpdatingExpressionId(expression.id);
+    setAuthMessage("");
+
+    const { error } = await supabase.from("expressions").delete().eq("id", expression.id);
+
+    if (error) {
+      setAuthMessage(`Could not delete expression: ${error.message}`);
+    } else {
+      setLibrary((current) => current.filter((item) => item.id !== expression.id));
+      setSelectedExpressionId("");
+    }
+
+    setUpdatingExpressionId("");
   }
 
   async function generateExpressions() {
@@ -512,7 +551,12 @@ export default function Home() {
                 </article>
               ) : (
                 filteredLibrary.map((item) => (
-                  <article className="library-card" key={item.id}>
+                  <button
+                    className={`library-card library-card-button ${selectedExpressionId === item.id ? "selected" : ""}`}
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedExpressionId(item.id)}
+                  >
                     <div className="card-topline">
                       <span>
                         {item.category} · {item.difficulty}
@@ -527,10 +571,74 @@ export default function Home() {
                         <span key={tag}>{tag}</span>
                       ))}
                     </div>
-                  </article>
+                  </button>
                 ))
               )}
             </section>
+            {selectedExpression && (
+              <section className="detail-panel" aria-label="Expression details">
+                <div className="section-heading">
+                  <h3>Expression details</h3>
+                  <button className="text-button" type="button" onClick={() => setSelectedExpressionId("")}>
+                    Close
+                  </button>
+                </div>
+                <article className="detail-card">
+                  <div className="card-topline">
+                    <span>
+                      {selectedExpression.category} · {selectedExpression.difficulty}
+                    </span>
+                    <b>{selectedExpression.status}</b>
+                  </div>
+                  <h3>{selectedExpression.english}</h3>
+                  <p>中文：{selectedExpression.chinese}</p>
+                  <div className="detail-block">
+                    <span>Why it works</span>
+                    <p>{selectedExpression.note}</p>
+                  </div>
+                  <div className="detail-block">
+                    <span>Alternatives</span>
+                    <ul>
+                      {selectedExpression.alternatives.map((alternative) => (
+                        <li key={alternative}>{alternative}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="detail-block">
+                    <span>Tags</span>
+                    <div className="tag-row">
+                      {selectedExpression.tags.map((tag) => (
+                        <span key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="detail-block">
+                    <span>Mastery status</span>
+                    <div className="status-grid">
+                      {masteryStatuses.map((status) => (
+                        <button
+                          className={`chip ${selectedExpression.status === status ? "active" : ""}`}
+                          key={status}
+                          type="button"
+                          disabled={updatingExpressionId === selectedExpression.id}
+                          onClick={() => updateExpressionStatus(selectedExpression, status)}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    disabled={updatingExpressionId === selectedExpression.id}
+                    onClick={() => deleteExpression(selectedExpression)}
+                  >
+                    {updatingExpressionId === selectedExpression.id ? "Updating..." : "Delete expression"}
+                  </button>
+                </article>
+              </section>
+            )}
           </div>
         )}
 
