@@ -102,6 +102,9 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [thought, setThought] = useState("我不是很确定这个方案是不是最优的，但我觉得我们可以先试一下。");
+  const [generatedExpressions, setGeneratedExpressions] = useState<Omit<ExpressionInsert, "status">[]>(generatedSamples);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
   const [library, setLibrary] = useState<Expression[]>([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -223,6 +226,36 @@ export default function Home() {
     }
 
     setSavingExpression("");
+  }
+
+  async function generateExpressions() {
+    setGenerateError("");
+    setIsGenerating(true);
+
+    try {
+      const response = await fetch("/api/generate-expressions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ thought }),
+      });
+
+      const data = (await response.json()) as {
+        expressions?: Omit<ExpressionInsert, "status">[];
+        error?: string;
+      };
+
+      if (!response.ok || !data.expressions) {
+        throw new Error(data.error ?? "Could not generate expressions.");
+      }
+
+      setGeneratedExpressions(data.expressions);
+    } catch (error) {
+      setGenerateError(error instanceof Error ? error.message : "Could not generate expressions.");
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   if (isAuthLoading && !user) {
@@ -404,13 +437,14 @@ export default function Home() {
             <section className="input-panel">
               <label htmlFor="thought-input">Chinese thought</label>
               <textarea id="thought-input" value={thought} onChange={(event) => setThought(event.target.value)} />
-              <button className="primary-button" type="button">
-                Generate 3 expressions
+              {generateError && <p className="form-message">{generateError}</p>}
+              <button className="primary-button" type="button" onClick={generateExpressions} disabled={isGenerating}>
+                {isGenerating ? "Generating..." : "Generate 3 expressions"}
               </button>
             </section>
 
             <section className="generated-list">
-              {generatedSamples.map((sample) => {
+              {generatedExpressions.map((sample) => {
                 const key = `${sample.english}-${sample.difficulty}`;
                 const alreadySaved = library.some((item) => item.english === sample.english);
                 return (

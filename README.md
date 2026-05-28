@@ -38,6 +38,8 @@ Set:
 ```txt
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.4-mini
 ```
 
 ## Supabase Setup
@@ -61,7 +63,7 @@ npm run build
 
 ## Next Milestones
 
-1. Add Supabase authentication and database tables.
-2. Replace mock expression generation with an OpenAI-backed API route.
-3. Store saved expressions per user.
-4. Add recording, transcription, and speaking feedback.
+1. Deploy the app to Vercel with Supabase and OpenAI environment variables.
+2. Add expression editing, delete, and mastery-status updates.
+3. Add recording, transcription, and speaking feedback.
+4. Add daily practice history and adaptive plan tracking.
