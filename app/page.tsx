@@ -229,6 +229,31 @@ export default function Home() {
         minute: "2-digit",
       }).format(new Date(practiceSessions[0].created_at))
     : "Not yet";
+  const practicedExpressionCounts = practiceSessions.reduce<Record<string, number>>((counts, session) => {
+    if (session.expression_id) {
+      counts[session.expression_id] = (counts[session.expression_id] ?? 0) + 1;
+    }
+
+    return counts;
+  }, {});
+  const reviewItems =
+    library.length > 0
+      ? [...library]
+          .sort((a, b) => {
+            const statusPriority: Record<MasteryStatus, number> = {
+              Struggling: 0,
+              New: 1,
+              Practising: 2,
+              Mastered: 3,
+            };
+            const statusDelta = statusPriority[a.status] - statusPriority[b.status];
+
+            if (statusDelta !== 0) return statusDelta;
+
+            return (practicedExpressionCounts[a.id] ?? 0) - (practicedExpressionCounts[b.id] ?? 0);
+          })
+          .slice(0, 3)
+      : starterLibrary.slice(0, 2);
 
   function startPractice(expression: Expression) {
     setPracticeExpressionId(expression.id);
@@ -554,8 +579,6 @@ export default function Home() {
     );
   }
 
-  const reviewItems = library.length > 0 ? library.slice(0, 2) : starterLibrary.slice(0, 2);
-
   return (
     <main className="phone-shell">
       <section className="screen active" aria-label="SpeakVault app">
@@ -692,9 +715,9 @@ export default function Home() {
               </div>
               <div className="mini-list">
                 {reviewItems.map((item) => (
-                  <button className="mini-item" key={item.id} type="button" onClick={() => setActiveView("library")}>
+                  <button className="mini-item" key={item.id} type="button" onClick={() => startPractice(item)}>
                     <span>{item.english}</span>
-                    <b>{item.status}</b>
+                    <b>{item.status} · {practicedExpressionCounts[item.id] ?? 0}x</b>
                   </button>
                 ))}
               </div>
