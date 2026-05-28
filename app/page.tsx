@@ -142,6 +142,7 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [spokenTranscript, setSpokenTranscript] = useState("");
+  const [practiceVoiceMessage, setPracticeVoiceMessage] = useState("");
   const [thought, setThought] = useState("我不是很确定这个方案是不是最优的，但我觉得我们可以先试一下。");
   const [generatedExpressions, setGeneratedExpressions] = useState<Omit<ExpressionInsert, "status">[]>(generatedSamples);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -327,8 +328,14 @@ export default function Home() {
     setShowTranscript(false);
     setIsRecording(false);
     setSpokenTranscript("");
+    setPracticeVoiceMessage("");
     transcriptRef.current = "";
     setActiveView("practice");
+  }
+
+  function showVoiceIssue(message: string) {
+    setPracticeVoiceMessage(message);
+    setAuthMessage(message);
   }
 
   function getSpeechRecognition() {
@@ -343,11 +350,14 @@ export default function Home() {
   }
 
   function startSpeechPractice() {
-    if (!user) return;
+    if (!user) {
+      showVoiceIssue("Please sign in before saving speech practice.");
+      return;
+    }
 
     const Recognition = getSpeechRecognition();
     if (!Recognition) {
-      setAuthMessage("Speech recognition is not available in this browser. Try Chrome on desktop.");
+      showVoiceIssue("Speech recognition is not available in this browser. Try Chrome on desktop.");
       return;
     }
 
@@ -358,6 +368,7 @@ export default function Home() {
     recognition.interimResults = true;
     transcriptRef.current = "";
     setSpokenTranscript("");
+    setPracticeVoiceMessage("Listening... speak your English answer now.");
     setShowTranscript(false);
     setAuthMessage("");
     setIsRecording(true);
@@ -372,9 +383,16 @@ export default function Home() {
 
       transcriptRef.current = transcript;
       setSpokenTranscript(transcript);
+      if (transcript) {
+        setPracticeVoiceMessage("Listening... transcript is coming through.");
+      }
     };
     recognition.onerror = (event) => {
-      setAuthMessage(`Speech recognition error: ${event.error}`);
+      const message =
+        event.error === "not-allowed"
+          ? "Microphone access was blocked. Allow microphone access for localhost in Chrome, then try again."
+          : `Speech recognition error: ${event.error}`;
+      showVoiceIssue(message);
       setIsRecording(false);
     };
     recognition.onend = () => {
@@ -391,7 +409,7 @@ export default function Home() {
     const transcript = transcriptRef.current.trim();
 
     if (!transcript) {
-      setAuthMessage("No speech was captured yet. Try speaking once, then stop and save.");
+      showVoiceIssue("No speech was captured yet. Try speaking once, then stop and save.");
       return;
     }
 
@@ -557,6 +575,7 @@ export default function Home() {
     setIsRecording(false);
     setIsSavingPractice(false);
     setSpokenTranscript(transcript || practiceExpression.english);
+    setPracticeVoiceMessage("");
   }
 
   async function deleteExpression(expression: Expression) {
@@ -747,6 +766,7 @@ export default function Home() {
                   setShowTranscript(false);
                   setIsRecording(false);
                   setSpokenTranscript("");
+                  setPracticeVoiceMessage("");
                   transcriptRef.current = "";
                 }}
               >
@@ -784,6 +804,7 @@ export default function Home() {
                 <span />
                 {isSavingPractice ? "Saving..." : isRecording ? "Stop and save" : showTranscript ? "Record again" : "Start speaking"}
               </button>
+              {practiceVoiceMessage && <p className="practice-message">{practiceVoiceMessage}</p>}
               {isRecording && spokenTranscript && (
                 <div className="live-transcript">
                   <p className="label">Live transcript</p>

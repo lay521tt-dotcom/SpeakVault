@@ -455,6 +455,17 @@ textarea {
   animation: blink 750ms ease-in-out infinite;
 }
 
+.practice-message {
+  margin: -0.25rem 0 0;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e7d8c6;
+  background: #fff8ef;
+  color: var(--warm);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
 @keyframes blink {
   50% {
     opacity: 0.25;
