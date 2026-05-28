@@ -251,6 +251,7 @@ export default function Home() {
       }
 
       setGeneratedExpressions(data.expressions);
+      setAuthMessage("");
     } catch (error) {
       setGenerateError(error instanceof Error ? error.message : "Could not generate expressions.");
     } finally {
