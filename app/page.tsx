@@ -121,6 +121,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [savingExpression, setSavingExpression] = useState("");
   const [selectedExpressionId, setSelectedExpressionId] = useState("");
+  const [practiceExpressionId, setPracticeExpressionId] = useState("");
   const [updatingExpressionId, setUpdatingExpressionId] = useState("");
   const [isEditingExpression, setIsEditingExpression] = useState(false);
   const [editExpressionForm, setEditExpressionForm] = useState<EditExpressionForm>({
@@ -195,6 +196,14 @@ export default function Home() {
   }
 
   const selectedExpression = library.find((item) => item.id === selectedExpressionId) ?? null;
+  const practiceExpression = library.find((item) => item.id === practiceExpressionId) ?? starterLibrary[0];
+
+  function startPractice(expression: Expression) {
+    setPracticeExpressionId(expression.id);
+    setShowTranscript(false);
+    setIsRecording(false);
+    setActiveView("practice");
+  }
 
   function beginEditExpression(expression: Expression) {
     setEditExpressionForm({
@@ -477,8 +486,8 @@ export default function Home() {
             <section className="daily-panel">
               <div>
                 <p className="eyebrow">Today&apos;s mission</p>
-                <h3>Ask for clarification in a tax meeting</h3>
-                <p>Focus on sounding calm, specific, and professional when you need more context.</p>
+                <h3>{practiceExpression.category}</h3>
+                <p>Look at the Chinese prompt, say the English out loud, then compare it with your target expression.</p>
               </div>
               <button
                 className="pulse-button"
@@ -510,9 +519,9 @@ export default function Home() {
             <section className="practice-card">
               <div className="card-topline">
                 <span>Speaking prompt</span>
-                <b>Work Meeting</b>
+                <b>{practiceExpression.difficulty}</b>
               </div>
-              <p className="chinese-prompt">我想确认一下这个数字是基于最新的客户资料吗？</p>
+              <p className="chinese-prompt">{practiceExpression.chinese}</p>
               <button
                 className={`record-button ${isRecording ? "recording" : ""}`}
                 type="button"
@@ -527,7 +536,7 @@ export default function Home() {
               {showTranscript && (
                 <div className="transcript-panel">
                   <p className="label">Your transcript</p>
-                  <p>Could I just check whether this figure is based on the latest client information?</p>
+                  <p>{practiceExpression.english}</p>
                   <div className="score-row">
                     <span>Pronunciation 82</span>
                     <span>Naturalness 88</span>
@@ -535,6 +544,10 @@ export default function Home() {
                   </div>
                 </div>
               )}
+              <div className="target-expression">
+                <p className="label">Target expression</p>
+                <p>{practiceExpression.english}</p>
+              </div>
             </section>
 
             <section>
@@ -767,6 +780,9 @@ export default function Home() {
                         </div>
                       </div>
                       <div className="detail-actions">
+                        <button className="secondary-button" type="button" onClick={() => startPractice(selectedExpression)}>
+                          Practice this
+                        </button>
                         <button className="secondary-button" type="button" onClick={() => beginEditExpression(selectedExpression)}>
                           Edit expression
                         </button>
