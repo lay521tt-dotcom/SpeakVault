@@ -179,10 +179,17 @@ export default function Home() {
   const transcriptRef = useRef("");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
-      setIsAuthLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        setUser(data.session?.user ?? null);
+      })
+      .catch((error: unknown) => {
+        setAuthMessage(`Could not connect to Supabase auth: ${getErrorMessage(error)}`);
+      })
+      .finally(() => {
+        setIsAuthLoading(false);
+      });
 
     const {
       data: { subscription },
@@ -233,34 +240,45 @@ export default function Home() {
 
   async function loadExpressions() {
     setIsLibraryLoading(true);
-    const { data, error } = await supabase.from("expressions").select("*").order("created_at", { ascending: false });
 
-    if (error) {
-      setAuthMessage(`Could not load your library: ${error.message}`);
+    try {
+      const { data, error } = await supabase.from("expressions").select("*").order("created_at", { ascending: false });
+
+      if (error) {
+        setAuthMessage(`Could not load your library: ${error.message}`);
+        setLibrary([]);
+      } else {
+        setLibrary(data ?? []);
+        setSelectedExpressionId((current) => (current && data?.some((item) => item.id === current) ? current : ""));
+        setIsEditingExpression(false);
+      }
+    } catch (error) {
+      setAuthMessage(`Could not load your library: ${getErrorMessage(error)}`);
       setLibrary([]);
-    } else {
-      setLibrary(data ?? []);
-      setSelectedExpressionId((current) => (current && data?.some((item) => item.id === current) ? current : ""));
-      setIsEditingExpression(false);
+    } finally {
+      setIsLibraryLoading(false);
     }
-
-    setIsLibraryLoading(false);
   }
 
   async function loadPracticeSessions() {
-    const { data, error } = await supabase
-      .from("practice_sessions")
-      .select("*, expressions(id, english, chinese, category, difficulty)")
-      .order("created_at", { ascending: false })
-      .limit(30);
+    try {
+      const { data, error } = await supabase
+        .from("practice_sessions")
+        .select("*, expressions(id, english, chinese, category, difficulty)")
+        .order("created_at", { ascending: false })
+        .limit(30);
 
-    if (error) {
-      if (!error.message.includes("practice_sessions")) {
-        setAuthMessage(`Could not load practice history: ${error.message}`);
+      if (error) {
+        if (!error.message.includes("practice_sessions")) {
+          setAuthMessage(`Could not load practice history: ${error.message}`);
+        }
+        setPracticeSessions([]);
+      } else {
+        setPracticeSessions((data ?? []) as PracticeSessionWithExpression[]);
       }
+    } catch (error) {
+      setAuthMessage(`Could not load practice history: ${getErrorMessage(error)}`);
       setPracticeSessions([]);
-    } else {
-      setPracticeSessions((data ?? []) as PracticeSessionWithExpression[]);
     }
   }
 
@@ -468,6 +486,10 @@ export default function Home() {
     }));
   }
 
+  function getErrorMessage(error: unknown) {
+    return error instanceof Error ? error.message : "Network request failed.";
+  }
+
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAuthMessage("");
@@ -478,25 +500,34 @@ export default function Home() {
       password: authPassword,
     };
 
-    const { data, error } =
-      authMode === "sign-in"
-        ? await supabase.auth.signInWithPassword(credentials)
-        : await supabase.auth.signUp(credentials);
+    try {
+      const { data, error } =
+        authMode === "sign-in"
+          ? await supabase.auth.signInWithPassword(credentials)
+          : await supabase.auth.signUp(credentials);
 
-    if (error) {
-      setAuthMessage(error.message);
-    } else if (authMode === "sign-up" && !data.session) {
-      setAuthMessage("Account created. Please check your email to confirm your sign-up.");
-    } else {
-      setUser(data.user);
-      setAuthMessage("");
+      if (error) {
+        setAuthMessage(error.message);
+      } else if (authMode === "sign-up" && !data.session) {
+        setAuthMessage("Account created. Please check your email to confirm your sign-up.");
+      } else {
+        setUser(data.user);
+        setAuthMessage("");
+      }
+    } catch (error) {
+      setAuthMessage(`Could not connect to Supabase auth: ${getErrorMessage(error)}`);
+    } finally {
+      setIsAuthLoading(false);
     }
-
-    setIsAuthLoading(false);
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      setAuthMessage(`Could not sign out from Supabase: ${getErrorMessage(error)}`);
+    }
+
     setUser(null);
     setLibrary([]);
     setPracticeSessions([]);
@@ -509,39 +540,47 @@ export default function Home() {
     const key = `${sample.english}-${sample.difficulty}`;
     setSavingExpression(key);
 
-    const { data, error } = await supabase
-      .from("expressions")
-      .insert({
-        ...sample,
-        status: "New",
-        user_id: user.id,
-      })
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("expressions")
+        .insert({
+          ...sample,
+          status: "New",
+          user_id: user.id,
+        })
+        .select()
+        .single();
 
-    if (error) {
-      setAuthMessage(`Could not save expression: ${error.message}`);
-    } else if (data) {
-      setLibrary((current) => [data, ...current]);
-      setActiveView("library");
+      if (error) {
+        setAuthMessage(`Could not save expression: ${error.message}`);
+      } else if (data) {
+        setLibrary((current) => [data, ...current]);
+        setActiveView("library");
+      }
+    } catch (error) {
+      setAuthMessage(`Could not save expression: ${getErrorMessage(error)}`);
+    } finally {
+      setSavingExpression("");
     }
-
-    setSavingExpression("");
   }
 
   async function updateExpressionStatus(expression: Expression, status: MasteryStatus) {
     setUpdatingExpressionId(expression.id);
     setAuthMessage("");
 
-    const { data, error } = await supabase.from("expressions").update({ status }).eq("id", expression.id).select().single();
+    try {
+      const { data, error } = await supabase.from("expressions").update({ status }).eq("id", expression.id).select().single();
 
-    if (error) {
-      setAuthMessage(`Could not update expression: ${error.message}`);
-    } else if (data) {
-      setLibrary((current) => current.map((item) => (item.id === data.id ? data : item)));
+      if (error) {
+        setAuthMessage(`Could not update expression: ${error.message}`);
+      } else if (data) {
+        setLibrary((current) => current.map((item) => (item.id === data.id ? data : item)));
+      }
+    } catch (error) {
+      setAuthMessage(`Could not update expression: ${getErrorMessage(error)}`);
+    } finally {
+      setUpdatingExpressionId("");
     }
-
-    setUpdatingExpressionId("");
   }
 
   async function savePracticeSession(transcript = spokenTranscript.trim()) {
@@ -589,45 +628,49 @@ export default function Home() {
       setPracticeVoiceMessage(feedbackWarning);
     }
 
-    const { data, error } = await supabase
-      .from("practice_sessions")
-      .insert({
-        user_id: user.id,
-        expression_id: isSavedExpression ? practiceExpression.id : null,
-        transcript: savedTranscript,
-        pronunciation_score: feedback.pronunciation_score,
-        naturalness_score: feedback.naturalness_score,
-        completeness_score: feedback.completeness_score,
-      })
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("practice_sessions")
+        .insert({
+          user_id: user.id,
+          expression_id: isSavedExpression ? practiceExpression.id : null,
+          transcript: savedTranscript,
+          pronunciation_score: feedback.pronunciation_score,
+          naturalness_score: feedback.naturalness_score,
+          completeness_score: feedback.completeness_score,
+        })
+        .select()
+        .single();
 
-    if (error) {
-      if (error.message.includes("practice_sessions")) {
-        setAuthMessage("Practice history is not set up yet. Run supabase/practice_sessions.sql in Supabase, then try again.");
-      } else {
-        setAuthMessage(`Could not save practice session: ${error.message}`);
-      }
-    } else if (data) {
-      setPracticeSessions((current) => [
-        {
-          ...data,
-          expressions: isSavedExpression
-            ? {
-                id: practiceExpression.id,
-                english: practiceExpression.english,
-                chinese: practiceExpression.chinese,
-                category: practiceExpression.category,
-                difficulty: practiceExpression.difficulty,
-              }
-            : null,
-        },
-        ...current,
-      ]);
+      if (error) {
+        if (error.message.includes("practice_sessions")) {
+          setAuthMessage("Practice history is not set up yet. Run supabase/practice_sessions.sql in Supabase, then try again.");
+        } else {
+          setAuthMessage(`Could not save practice session: ${error.message}`);
+        }
+      } else if (data) {
+        setPracticeSessions((current) => [
+          {
+            ...data,
+            expressions: isSavedExpression
+              ? {
+                  id: practiceExpression.id,
+                  english: practiceExpression.english,
+                  chinese: practiceExpression.chinese,
+                  category: practiceExpression.category,
+                  difficulty: practiceExpression.difficulty,
+                }
+              : null,
+          },
+          ...current,
+        ]);
 
-      if (isSavedExpression && practiceExpression.status !== "Practising") {
-        await updateExpressionStatus(practiceExpression, "Practising");
+        if (isSavedExpression && practiceExpression.status !== "Practising") {
+          await updateExpressionStatus(practiceExpression, "Practising");
+        }
       }
+    } catch (error) {
+      setAuthMessage(`Could not save practice session: ${getErrorMessage(error)}`);
     }
 
     setIsRecording(false);
@@ -643,17 +686,21 @@ export default function Home() {
     setUpdatingExpressionId(expression.id);
     setAuthMessage("");
 
-    const { error } = await supabase.from("expressions").delete().eq("id", expression.id);
+    try {
+      const { error } = await supabase.from("expressions").delete().eq("id", expression.id);
 
-    if (error) {
-      setAuthMessage(`Could not delete expression: ${error.message}`);
-    } else {
-      setLibrary((current) => current.filter((item) => item.id !== expression.id));
-      setSelectedExpressionId("");
-      setIsEditingExpression(false);
+      if (error) {
+        setAuthMessage(`Could not delete expression: ${error.message}`);
+      } else {
+        setLibrary((current) => current.filter((item) => item.id !== expression.id));
+        setSelectedExpressionId("");
+        setIsEditingExpression(false);
+      }
+    } catch (error) {
+      setAuthMessage(`Could not delete expression: ${getErrorMessage(error)}`);
+    } finally {
+      setUpdatingExpressionId("");
     }
-
-    setUpdatingExpressionId("");
   }
 
   async function saveExpressionEdits(expression: Expression) {
@@ -675,21 +722,25 @@ export default function Home() {
     setUpdatingExpressionId(expression.id);
     setAuthMessage("");
 
-    const { data, error } = await supabase
-      .from("expressions")
-      .update(nextExpression)
-      .eq("id", expression.id)
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("expressions")
+        .update(nextExpression)
+        .eq("id", expression.id)
+        .select()
+        .single();
 
-    if (error) {
-      setAuthMessage(`Could not save edits: ${error.message}`);
-    } else if (data) {
-      setLibrary((current) => current.map((item) => (item.id === data.id ? data : item)));
-      setIsEditingExpression(false);
+      if (error) {
+        setAuthMessage(`Could not save edits: ${error.message}`);
+      } else if (data) {
+        setLibrary((current) => current.map((item) => (item.id === data.id ? data : item)));
+        setIsEditingExpression(false);
+      }
+    } catch (error) {
+      setAuthMessage(`Could not save edits: ${getErrorMessage(error)}`);
+    } finally {
+      setUpdatingExpressionId("");
     }
-
-    setUpdatingExpressionId("");
   }
 
   async function generateExpressions() {
