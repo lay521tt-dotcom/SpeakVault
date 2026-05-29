@@ -23,9 +23,12 @@ export type PracticeSession = {
   expression_id: string | null;
   transcript: string;
   pronunciation_score: number;
+  accent_score: number | null;
   naturalness_score: number;
   completeness_score: number;
   feedback_summary: string | null;
+  accent_focus: string | null;
+  pronunciation_drill: string | null;
   better_version: string | null;
   next_step: string | null;
   created_at: string;
@@ -75,9 +78,12 @@ export type Database = {
           expression_id?: string | null;
           transcript: string;
           pronunciation_score: number;
+          accent_score?: number | null;
           naturalness_score: number;
           completeness_score: number;
           feedback_summary?: string | null;
+          accent_focus?: string | null;
+          pronunciation_drill?: string | null;
           better_version?: string | null;
           next_step?: string | null;
           created_at?: string;
@@ -85,9 +91,12 @@ export type Database = {
         Update: Partial<{
           transcript: string;
           pronunciation_score: number;
+          accent_score: number | null;
           naturalness_score: number;
           completeness_score: number;
           feedback_summary: string | null;
+          accent_focus: string | null;
+          pronunciation_drill: string | null;
           better_version: string | null;
           next_step: string | null;
         }>;

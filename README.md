@@ -12,8 +12,9 @@ This v1.0 build is tailored for a Chinese native speaker in Auckland working as 
 - Categories, tags, alternatives, notes, and mastery status
 - Browser speech recognition with `en-NZ` language mode
 - Typed transcript fallback when microphone access is blocked
-- AI practice evaluation with pronunciation, naturalness, and completeness scores
-- Practice history with persisted transcripts, scores, and feedback
+- AI practice evaluation with pronunciation, accent, naturalness, and completeness scores
+- Accent focus and pronunciation drill suggestions for Chinese native speakers
+- Practice history with persisted transcripts, scores, accent notes, and feedback
 - Adaptive review queue and 30-day plan focus
 - Mobile-first PWA shell with manifest and app icon
 
@@ -62,7 +63,7 @@ If you already created `practice_sessions` before v1.0, also run:
 supabase/practice_feedback.sql
 ```
 
-That migration adds feedback persistence columns to existing projects.
+That migration adds feedback and accent-analysis persistence columns to existing projects.
 
 ## Verification
 
@@ -73,4 +74,4 @@ npm run build
 
 ## v1.0 Notes
 
-The app gracefully handles temporary Supabase or AI failures. If AI feedback is unavailable, practice sessions still save with fallback scores. If the feedback migration has not been applied, feedback still appears immediately after practice and the app tells you which SQL file to run to persist it in history.
+The app gracefully handles temporary Supabase or AI failures. If AI feedback is unavailable, practice sessions still save with fallback scores. Accent analysis is based on transcript and likely pronunciation risks; true audio-waveform accent scoring can be added later with audio upload.

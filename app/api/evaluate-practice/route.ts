@@ -3,9 +3,12 @@ import { NextResponse } from "next/server";
 
 type PracticeEvaluation = {
   pronunciation_score: number;
+  accent_score: number;
   naturalness_score: number;
   completeness_score: number;
   summary: string;
+  accent_focus: string;
+  pronunciation_drill: string;
   better_version: string;
   next_step: string;
 };
@@ -15,17 +18,30 @@ const evaluationSchema = {
   additionalProperties: false,
   properties: {
     pronunciation_score: { type: "integer", minimum: 0, maximum: 100 },
+    accent_score: { type: "integer", minimum: 0, maximum: 100 },
     naturalness_score: { type: "integer", minimum: 0, maximum: 100 },
     completeness_score: { type: "integer", minimum: 0, maximum: 100 },
     summary: { type: "string" },
+    accent_focus: { type: "string" },
+    pronunciation_drill: { type: "string" },
     better_version: { type: "string" },
     next_step: { type: "string" },
   },
-  required: ["pronunciation_score", "naturalness_score", "completeness_score", "summary", "better_version", "next_step"],
+  required: [
+    "pronunciation_score",
+    "accent_score",
+    "naturalness_score",
+    "completeness_score",
+    "summary",
+    "accent_focus",
+    "pronunciation_drill",
+    "better_version",
+    "next_step",
+  ],
 } as const;
 
 function buildSystemPrompt() {
-  return "You are SpeakVault, a supportive English speaking coach for a Chinese native speaker in Auckland who works as a tax accountant. Evaluate spoken workplace English. Be practical, concise, and encouraging. Prefer NZ/AU workplace English. Score pronunciation conservatively from transcript quality only, since no audio is available.";
+  return "You are SpeakVault, a supportive English speaking coach for a Chinese native speaker in Auckland who works as a tax accountant. Evaluate spoken workplace English. Be practical, concise, and encouraging. Prefer NZ/AU workplace English. Score pronunciation and accent conservatively from transcript quality and likely Chinese-speaker pronunciation risks only, since no audio waveform is available yet. Give concrete accent correction advice such as stress, rhythm, linking, final consonants, vowel contrast, or intonation.";
 }
 
 function buildUserPrompt(transcript: string, targetExpression: string, chinesePrompt: string) {
@@ -33,7 +49,9 @@ function buildUserPrompt(transcript: string, targetExpression: string, chinesePr
 Target expression: ${targetExpression}
 User transcript: ${transcript}
 
-Evaluate whether the user's spoken answer expresses the same intent naturally. Return scores and short feedback. The better_version should be a speakable version close to the user's intent, not a long written sentence.`;
+Evaluate whether the user's spoken answer expresses the same intent naturally. Return scores and short feedback. The better_version should be a speakable version close to the user's intent, not a long written sentence.
+
+For accent_focus, name the most useful pronunciation/accent correction point for a Chinese native speaker saying this sentence. For pronunciation_drill, give one short repeatable drill the user can say aloud.`;
 }
 
 export async function POST(request: Request) {

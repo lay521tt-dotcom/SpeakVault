@@ -7,6 +7,7 @@
 - Added searchable expression library with edit, delete, status, tags, notes, and alternatives.
 - Added speech practice with browser transcription and typed transcript fallback.
 - Added AI practice evaluation with scores, better version, and next step.
+- Added transcript-based accent focus and pronunciation drills.
 - Added persisted practice feedback fields and migration SQL.
 - Added adaptive review queue and plan focus.
 - Added PWA manifest icon and production setup documentation.

@@ -18,9 +18,12 @@ type EditExpressionForm = {
 };
 type PracticeFeedback = {
   pronunciation_score: number;
+  accent_score: number;
   naturalness_score: number;
   completeness_score: number;
   summary: string;
+  accent_focus: string;
+  pronunciation_drill: string;
   better_version: string;
   next_step: string;
 };
@@ -367,7 +370,12 @@ export default function Home() {
   }
 
   function isPracticeFeedback(result: PracticeFeedback | { error?: string }): result is PracticeFeedback {
-    return "pronunciation_score" in result && "naturalness_score" in result && "completeness_score" in result;
+    return (
+      "pronunciation_score" in result &&
+      "accent_score" in result &&
+      "naturalness_score" in result &&
+      "completeness_score" in result
+    );
   }
 
   function getSpeechRecognition() {
@@ -493,6 +501,9 @@ export default function Home() {
   function isMissingFeedbackColumns(message: string) {
     return (
       message.includes("feedback_summary") ||
+      message.includes("accent_score") ||
+      message.includes("accent_focus") ||
+      message.includes("pronunciation_drill") ||
       message.includes("better_version") ||
       message.includes("next_step") ||
       message.includes("schema cache")
@@ -605,9 +616,12 @@ export default function Home() {
     let persistenceWarning = "";
     let feedback: PracticeFeedback = {
       pronunciation_score: 82,
+      accent_score: 82,
       naturalness_score: 88,
       completeness_score: 91,
       summary: "Saved with fallback scores because AI feedback was not available.",
+      accent_focus: "Focus on clear sentence stress and final consonants.",
+      pronunciation_drill: "Could I just check? Could I just check whether this figure is based on the latest client information?",
       better_version: practiceExpression.english,
       next_step: "Try the sentence again and compare it with the target expression.",
     };
@@ -643,9 +657,12 @@ export default function Home() {
       expression_id: isSavedExpression ? practiceExpression.id : null,
       transcript: savedTranscript,
       pronunciation_score: feedback.pronunciation_score,
+      accent_score: feedback.accent_score,
       naturalness_score: feedback.naturalness_score,
       completeness_score: feedback.completeness_score,
       feedback_summary: feedback.summary,
+      accent_focus: feedback.accent_focus,
+      pronunciation_drill: feedback.pronunciation_drill,
       better_version: feedback.better_version,
       next_step: feedback.next_step,
     };
@@ -672,16 +689,16 @@ export default function Home() {
           ? {
               ...fallbackResult.data,
               feedback_summary: feedback.summary,
+              accent_score: feedback.accent_score,
+              accent_focus: feedback.accent_focus,
+              pronunciation_drill: feedback.pronunciation_drill,
               better_version: feedback.better_version,
               next_step: feedback.next_step,
             }
           : fallbackResult.data;
         error = fallbackResult.error;
 
-        if (!feedbackWarning) {
-          persistenceWarning = "AI feedback is shown below. Run supabase/practice_feedback.sql to save feedback into history.";
-          setPracticeVoiceMessage(persistenceWarning);
-        }
+        persistenceWarning = "";
       }
 
       if (error) {
@@ -971,6 +988,7 @@ export default function Home() {
                   <p>{spokenTranscript || practiceExpression.english}</p>
                   <div className="score-row">
                     <span>Pronunciation {practiceFeedback?.pronunciation_score ?? 82}</span>
+                    <span>Accent {practiceFeedback?.accent_score ?? 82}</span>
                     <span>Naturalness {practiceFeedback?.naturalness_score ?? 88}</span>
                     <span>Completeness {practiceFeedback?.completeness_score ?? 91}</span>
                   </div>
@@ -978,6 +996,12 @@ export default function Home() {
                     <div className="feedback-notes">
                       <p className="label">AI feedback</p>
                       <p>{practiceFeedback.summary}</p>
+                      <p>
+                        <b>Accent focus:</b> {practiceFeedback.accent_focus}
+                      </p>
+                      <p>
+                        <b>Drill:</b> {practiceFeedback.pronunciation_drill}
+                      </p>
                       <p>
                         <b>Better:</b> {practiceFeedback.better_version}
                       </p>
@@ -1041,12 +1065,27 @@ export default function Home() {
                       <p>{session.transcript}</p>
                       <div className="score-row">
                         <span>P {session.pronunciation_score}</span>
+                        {session.accent_score !== null && <span>A {session.accent_score}</span>}
                         <span>N {session.naturalness_score}</span>
                         <span>C {session.completeness_score}</span>
                       </div>
-                      {(session.feedback_summary || session.better_version || session.next_step) && (
+                      {(session.feedback_summary ||
+                        session.accent_focus ||
+                        session.pronunciation_drill ||
+                        session.better_version ||
+                        session.next_step) && (
                         <div className="session-feedback">
                           {session.feedback_summary && <p>{session.feedback_summary}</p>}
+                          {session.accent_focus && (
+                            <p>
+                              <b>Accent:</b> {session.accent_focus}
+                            </p>
+                          )}
+                          {session.pronunciation_drill && (
+                            <p>
+                              <b>Drill:</b> {session.pronunciation_drill}
+                            </p>
+                          )}
                           {session.better_version && (
                             <p>
                               <b>Better:</b> {session.better_version}

@@ -4,9 +4,12 @@ create table if not exists public.practice_sessions (
   expression_id uuid references public.expressions(id) on delete set null,
   transcript text not null,
   pronunciation_score integer not null check (pronunciation_score between 0 and 100),
+  accent_score integer check (accent_score between 0 and 100),
   naturalness_score integer not null check (naturalness_score between 0 and 100),
   completeness_score integer not null check (completeness_score between 0 and 100),
   feedback_summary text,
+  accent_focus text,
+  pronunciation_drill text,
   better_version text,
   next_step text,
   created_at timestamptz not null default now()
@@ -14,6 +17,9 @@ create table if not exists public.practice_sessions (
 
 alter table public.practice_sessions
   add column if not exists feedback_summary text,
+  add column if not exists accent_score integer check (accent_score between 0 and 100),
+  add column if not exists accent_focus text,
+  add column if not exists pronunciation_drill text,
   add column if not exists better_version text,
   add column if not exists next_step text;
 
