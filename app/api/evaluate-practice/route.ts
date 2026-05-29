@@ -4,11 +4,13 @@ import { NextResponse } from "next/server";
 type PracticeEvaluation = {
   pronunciation_score: number;
   accent_score: number;
+  fluency_score: number;
   naturalness_score: number;
   completeness_score: number;
   summary: string;
   accent_focus: string;
   pronunciation_drill: string;
+  audio_note: string;
   better_version: string;
   next_step: string;
 };
@@ -19,51 +21,67 @@ const evaluationSchema = {
   properties: {
     pronunciation_score: { type: "integer", minimum: 0, maximum: 100 },
     accent_score: { type: "integer", minimum: 0, maximum: 100 },
+    fluency_score: { type: "integer", minimum: 0, maximum: 100 },
     naturalness_score: { type: "integer", minimum: 0, maximum: 100 },
     completeness_score: { type: "integer", minimum: 0, maximum: 100 },
     summary: { type: "string" },
     accent_focus: { type: "string" },
     pronunciation_drill: { type: "string" },
+    audio_note: { type: "string" },
     better_version: { type: "string" },
     next_step: { type: "string" },
   },
   required: [
     "pronunciation_score",
     "accent_score",
+    "fluency_score",
     "naturalness_score",
     "completeness_score",
     "summary",
     "accent_focus",
     "pronunciation_drill",
+    "audio_note",
     "better_version",
     "next_step",
   ],
 } as const;
 
 function buildSystemPrompt() {
-  return "You are SpeakVault, a supportive English speaking coach for a Chinese native speaker in Auckland who works as a tax accountant. Evaluate spoken workplace English. Be practical, concise, and encouraging. Prefer NZ/AU workplace English. Score pronunciation and accent conservatively from transcript quality and likely Chinese-speaker pronunciation risks only, since no audio waveform is available yet. Give concrete accent correction advice such as stress, rhythm, linking, final consonants, vowel contrast, or intonation.";
+  return "You are SpeakVault, a supportive English speaking coach for a Chinese native speaker in Auckland who works as a tax accountant. Evaluate spoken workplace English. Be practical, concise, and encouraging. Prefer NZ/AU workplace English. Score pronunciation, accent, and fluency conservatively from transcript quality, input mode, recording duration, and likely Chinese-speaker pronunciation risks. Give concrete accent correction advice such as stress, rhythm, linking, final consonants, vowel contrast, or intonation. If input_mode is voice, audio_note should mention the recording duration and that full waveform-level analysis is not yet available. If input_mode is typed, audio_note should say this was typed and recommend recording audio for stronger accent feedback.";
 }
 
-function buildUserPrompt(transcript: string, targetExpression: string, chinesePrompt: string) {
+function buildUserPrompt(
+  transcript: string,
+  targetExpression: string,
+  chinesePrompt: string,
+  inputMode: string,
+  audioDurationMs: number,
+) {
   return `Chinese prompt: ${chinesePrompt}
 Target expression: ${targetExpression}
 User transcript: ${transcript}
+Input mode: ${inputMode}
+Recording duration: ${(audioDurationMs / 1000).toFixed(1)} seconds
 
 Evaluate whether the user's spoken answer expresses the same intent naturally. Return scores and short feedback. The better_version should be a speakable version close to the user's intent, not a long written sentence.
 
-For accent_focus, name the most useful pronunciation/accent correction point for a Chinese native speaker saying this sentence. For pronunciation_drill, give one short repeatable drill the user can say aloud.`;
+For accent_focus, name the most useful pronunciation/accent correction point for a Chinese native speaker saying this sentence. For pronunciation_drill, give one short repeatable drill the user can say aloud. For fluency_score, consider whether the expression is concise, smoothly paced, and complete for a workplace meeting.`;
 }
 
 export async function POST(request: Request) {
-  const { transcript, targetExpression, chinesePrompt } = (await request.json()) as {
+  const { transcript, targetExpression, chinesePrompt, inputMode, audioDurationMs } = (await request.json()) as {
     transcript?: string;
     targetExpression?: string;
     chinesePrompt?: string;
+    inputMode?: string;
+    audioDurationMs?: number;
   };
 
   const trimmedTranscript = transcript?.trim();
   const trimmedTarget = targetExpression?.trim();
   const trimmedPrompt = chinesePrompt?.trim();
+  const safeInputMode = inputMode === "voice" ? "voice" : "typed";
+  const safeAudioDurationMs = typeof audioDurationMs === "number" && Number.isFinite(audioDurationMs) ? audioDurationMs : 0;
 
   if (!trimmedTranscript || !trimmedTarget || !trimmedPrompt) {
     return NextResponse.json({ error: "Missing transcript, target expression, or Chinese prompt." }, { status: 400 });
@@ -73,8 +91,8 @@ export async function POST(request: Request) {
     const provider = process.env.AI_PROVIDER ?? "openai";
     const result =
       provider === "anthropic"
-        ? await evaluateWithAnthropic(trimmedTranscript, trimmedTarget, trimmedPrompt)
-        : await evaluateWithOpenAI(trimmedTranscript, trimmedTarget, trimmedPrompt);
+        ? await evaluateWithAnthropic(trimmedTranscript, trimmedTarget, trimmedPrompt, safeInputMode, safeAudioDurationMs)
+        : await evaluateWithOpenAI(trimmedTranscript, trimmedTarget, trimmedPrompt, safeInputMode, safeAudioDurationMs);
 
     return NextResponse.json(result);
   } catch (error) {
@@ -109,6 +127,8 @@ async function evaluateWithOpenAI(
   transcript: string,
   targetExpression: string,
   chinesePrompt: string,
+  inputMode: string,
+  audioDurationMs: number,
 ): Promise<PracticeEvaluation> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -126,7 +146,7 @@ async function evaluateWithOpenAI(
       },
       {
         role: "user",
-        content: buildUserPrompt(transcript, targetExpression, chinesePrompt),
+        content: buildUserPrompt(transcript, targetExpression, chinesePrompt, inputMode, audioDurationMs),
       },
     ],
     text: {
@@ -146,6 +166,8 @@ async function evaluateWithAnthropic(
   transcript: string,
   targetExpression: string,
   chinesePrompt: string,
+  inputMode: string,
+  audioDurationMs: number,
 ): Promise<PracticeEvaluation> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -173,7 +195,7 @@ async function evaluateWithAnthropic(
         messages: [
           {
             role: "user",
-            content: buildUserPrompt(transcript, targetExpression, chinesePrompt),
+            content: buildUserPrompt(transcript, targetExpression, chinesePrompt, inputMode, audioDurationMs),
           },
         ],
         tools: [

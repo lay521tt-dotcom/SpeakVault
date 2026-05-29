@@ -1,8 +1,8 @@
-# SpeakVault v1.0
+# SpeakVault v2.0
 
 SpeakVault is a personal English speaking web app for building a private vault of workplace-ready expressions, practising them aloud, and turning each practice attempt into feedback.
 
-This v1.0 build is tailored for a Chinese native speaker in Auckland working as a tax accountant, with NZ/AU workplace English as the default style.
+This v2.0 build is tailored for a Chinese native speaker in Auckland working as a tax accountant, with NZ/AU workplace English as the default style.
 
 ## Features
 
@@ -11,10 +11,11 @@ This v1.0 build is tailored for a Chinese native speaker in Auckland working as 
 - Searchable private expression library
 - Categories, tags, alternatives, notes, and mastery status
 - Browser speech recognition with `en-NZ` language mode
+- Real microphone audio recording with local playback
 - Typed transcript fallback when microphone access is blocked
-- AI practice evaluation with pronunciation, accent, naturalness, and completeness scores
+- AI practice evaluation with pronunciation, accent, fluency, naturalness, and completeness scores
 - Accent focus and pronunciation drill suggestions for Chinese native speakers
-- Practice history with persisted transcripts, scores, accent notes, and feedback
+- Practice history with persisted transcripts, input mode, recording duration, scores, accent notes, and feedback
 - Adaptive review queue and 30-day plan focus
 - Mobile-first PWA shell with manifest and app icon
 
@@ -57,13 +58,13 @@ Run these files in the Supabase SQL editor:
 1. `supabase/schema.sql`
 2. `supabase/practice_sessions.sql`
 
-If you already created `practice_sessions` before v1.0, also run:
+If you already created `practice_sessions` before v2.0, also run:
 
 ```txt
 supabase/practice_feedback.sql
 ```
 
-That migration adds feedback and accent-analysis persistence columns to existing projects.
+That migration adds feedback, input-mode, recording-duration, fluency, and accent-analysis persistence columns to existing projects.
 
 ## Verification
 
@@ -72,6 +73,6 @@ npm run typecheck
 npm run build
 ```
 
-## v1.0 Notes
+## v2.0 Notes
 
-The app gracefully handles temporary Supabase or AI failures. If AI feedback is unavailable, practice sessions still save with fallback scores. Accent analysis is based on transcript and likely pronunciation risks; true audio-waveform accent scoring can be added later with audio upload.
+The app gracefully handles temporary Supabase or AI failures. If AI feedback is unavailable, practice sessions still save with fallback scores. Voice attempts now capture a local audio clip for playback and pass input mode plus recording duration into the AI evaluator. Full waveform-level scoring can be added later with server-side audio upload/transcription.

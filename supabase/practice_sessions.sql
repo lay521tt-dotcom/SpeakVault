@@ -3,13 +3,17 @@ create table if not exists public.practice_sessions (
   user_id uuid not null references auth.users(id) on delete cascade,
   expression_id uuid references public.expressions(id) on delete set null,
   transcript text not null,
+  input_mode text check (input_mode in ('voice', 'typed')),
+  audio_duration_ms integer check (audio_duration_ms >= 0),
   pronunciation_score integer not null check (pronunciation_score between 0 and 100),
   accent_score integer check (accent_score between 0 and 100),
+  fluency_score integer check (fluency_score between 0 and 100),
   naturalness_score integer not null check (naturalness_score between 0 and 100),
   completeness_score integer not null check (completeness_score between 0 and 100),
   feedback_summary text,
   accent_focus text,
   pronunciation_drill text,
+  audio_note text,
   better_version text,
   next_step text,
   created_at timestamptz not null default now()
@@ -17,9 +21,13 @@ create table if not exists public.practice_sessions (
 
 alter table public.practice_sessions
   add column if not exists feedback_summary text,
+  add column if not exists input_mode text check (input_mode in ('voice', 'typed')),
+  add column if not exists audio_duration_ms integer check (audio_duration_ms >= 0),
   add column if not exists accent_score integer check (accent_score between 0 and 100),
+  add column if not exists fluency_score integer check (fluency_score between 0 and 100),
   add column if not exists accent_focus text,
   add column if not exists pronunciation_drill text,
+  add column if not exists audio_note text,
   add column if not exists better_version text,
   add column if not exists next_step text;
 

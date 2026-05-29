@@ -19,14 +19,17 @@ type EditExpressionForm = {
 type PracticeFeedback = {
   pronunciation_score: number;
   accent_score: number;
+  fluency_score: number;
   naturalness_score: number;
   completeness_score: number;
   summary: string;
   accent_focus: string;
   pronunciation_drill: string;
+  audio_note: string;
   better_version: string;
   next_step: string;
 };
+type PracticeInputMode = "voice" | "typed";
 type SpeechRecognitionAlternativeLike = {
   transcript: string;
 };
@@ -155,6 +158,9 @@ export default function Home() {
   const [spokenTranscript, setSpokenTranscript] = useState("");
   const [practiceVoiceMessage, setPracticeVoiceMessage] = useState("");
   const [practiceFeedback, setPracticeFeedback] = useState<PracticeFeedback | null>(null);
+  const [practiceAudioUrl, setPracticeAudioUrl] = useState("");
+  const [audioDurationMs, setAudioDurationMs] = useState(0);
+  const [practiceInputMode, setPracticeInputMode] = useState<PracticeInputMode>("typed");
   const [thought, setThought] = useState("我不是很确定这个方案是不是最优的，但我觉得我们可以先试一下。");
   const [generatedExpressions, setGeneratedExpressions] = useState<Omit<ExpressionInsert, "status">[]>(generatedSamples);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -180,6 +186,10 @@ export default function Home() {
   });
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const transcriptRef = useRef("");
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingStartedAtRef = useRef(0);
 
   useEffect(() => {
     supabase.auth
@@ -206,8 +216,13 @@ export default function Home() {
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
+      mediaRecorderRef.current?.stop();
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (practiceAudioUrl) {
+        URL.revokeObjectURL(practiceAudioUrl);
+      }
     };
-  }, []);
+  }, [practiceAudioUrl]);
 
   useEffect(() => {
     if (!user) {
@@ -355,13 +370,28 @@ export default function Home() {
 
   function startPractice(expression: Expression) {
     setPracticeExpressionId(expression.id);
+    resetPracticeCapture();
+    setActiveView("practice");
+  }
+
+  function resetPracticeCapture() {
+    recognitionRef.current?.stop();
+    mediaRecorderRef.current?.stop();
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     setShowTranscript(false);
     setIsRecording(false);
     setSpokenTranscript("");
     setPracticeVoiceMessage("");
     setPracticeFeedback(null);
+    setAudioDurationMs(0);
+    setPracticeInputMode("typed");
     transcriptRef.current = "";
-    setActiveView("practice");
+    audioChunksRef.current = [];
+    recordingStartedAtRef.current = 0;
+    if (practiceAudioUrl) {
+      URL.revokeObjectURL(practiceAudioUrl);
+      setPracticeAudioUrl("");
+    }
   }
 
   function showVoiceIssue(message: string) {
@@ -389,15 +419,64 @@ export default function Home() {
     return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
   }
 
-  function startSpeechPractice() {
+  async function startAudioRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      throw new Error("Audio recording is not available in this browser. Try Chrome on desktop.");
+    }
+
+    if (practiceAudioUrl) {
+      URL.revokeObjectURL(practiceAudioUrl);
+      setPracticeAudioUrl("");
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+    audioChunksRef.current = [];
+    mediaStreamRef.current = stream;
+    mediaRecorderRef.current = recorder;
+    recordingStartedAtRef.current = Date.now();
+    setAudioDurationMs(0);
+    setPracticeInputMode("voice");
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunksRef.current.push(event.data);
+      }
+    };
+    recorder.onstop = () => {
+      const duration = recordingStartedAtRef.current ? Date.now() - recordingStartedAtRef.current : 0;
+      const mimeType = recorder.mimeType || "audio/webm";
+      const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+      setAudioDurationMs(duration);
+      if (audioBlob.size > 0) {
+        setPracticeAudioUrl(URL.createObjectURL(audioBlob));
+      }
+      stream.getTracks().forEach((track) => track.stop());
+    };
+
+    recorder.start();
+  }
+
+  async function startSpeechPractice() {
     if (!user) {
       showVoiceIssue("Please sign in before saving speech practice.");
       return;
     }
 
+    try {
+      await startAudioRecording();
+    } catch (error) {
+      showVoiceIssue(getErrorMessage(error));
+      return;
+    }
+
     const Recognition = getSpeechRecognition();
     if (!Recognition) {
-      showVoiceIssue("Speech recognition is not available in this browser. Try Chrome on desktop.");
+      setPracticeVoiceMessage("Recording audio. Speech transcript is not available here, so type what you said after stopping.");
+      setShowTranscript(false);
+      setAuthMessage("");
+      setIsRecording(true);
       return;
     }
 
@@ -445,15 +524,18 @@ export default function Home() {
 
   function stopSpeechPractice() {
     recognitionRef.current?.stop();
+    mediaRecorderRef.current?.stop();
     setIsRecording(false);
     const transcript = transcriptRef.current.trim();
+    const duration = recordingStartedAtRef.current ? Date.now() - recordingStartedAtRef.current : audioDurationMs;
+    setAudioDurationMs(duration);
 
     if (!transcript) {
-      showVoiceIssue("No speech was captured yet. Try speaking once, then stop and save.");
+      showVoiceIssue("Audio captured. Type what you said below, then save it for AI feedback.");
       return;
     }
 
-    savePracticeSession(transcript);
+    savePracticeSession(transcript, "voice", duration);
   }
 
   function saveTypedTranscript() {
@@ -464,7 +546,7 @@ export default function Home() {
       return;
     }
 
-    savePracticeSession(transcript);
+    savePracticeSession(transcript, practiceAudioUrl ? "voice" : "typed", audioDurationMs);
   }
 
   function beginEditExpression(expression: Expression) {
@@ -501,9 +583,13 @@ export default function Home() {
   function isMissingFeedbackColumns(message: string) {
     return (
       message.includes("feedback_summary") ||
+      message.includes("input_mode") ||
+      message.includes("audio_duration_ms") ||
       message.includes("accent_score") ||
+      message.includes("fluency_score") ||
       message.includes("accent_focus") ||
       message.includes("pronunciation_drill") ||
+      message.includes("audio_note") ||
       message.includes("better_version") ||
       message.includes("next_step") ||
       message.includes("schema cache")
@@ -603,7 +689,11 @@ export default function Home() {
     }
   }
 
-  async function savePracticeSession(transcript = spokenTranscript.trim()) {
+  async function savePracticeSession(
+    transcript = spokenTranscript.trim(),
+    inputMode: PracticeInputMode = "typed",
+    durationMs = 0,
+  ) {
     if (!user) return;
 
     setShowTranscript(true);
@@ -617,15 +707,18 @@ export default function Home() {
     let feedback: PracticeFeedback = {
       pronunciation_score: 82,
       accent_score: 82,
+      fluency_score: 84,
       naturalness_score: 88,
       completeness_score: 91,
       summary: "Saved with fallback scores because AI feedback was not available.",
       accent_focus: "Focus on clear sentence stress and final consonants.",
       pronunciation_drill: "Could I just check? Could I just check whether this figure is based on the latest client information?",
+      audio_note: inputMode === "voice" ? "Audio was recorded locally for playback." : "This attempt was typed.",
       better_version: practiceExpression.english,
       next_step: "Try the sentence again and compare it with the target expression.",
     };
     const savedTranscript = transcript || practiceExpression.english;
+    const safeDurationMs = Math.max(0, Math.round(durationMs));
 
     try {
       const response = await fetch("/api/evaluate-practice", {
@@ -637,6 +730,8 @@ export default function Home() {
           transcript: savedTranscript,
           targetExpression: practiceExpression.english,
           chinesePrompt: practiceExpression.chinese,
+          inputMode,
+          audioDurationMs: safeDurationMs,
         }),
       });
       const result = (await response.json()) as PracticeFeedback | { error?: string };
@@ -656,13 +751,17 @@ export default function Home() {
       user_id: user.id,
       expression_id: isSavedExpression ? practiceExpression.id : null,
       transcript: savedTranscript,
+      input_mode: inputMode,
+      audio_duration_ms: safeDurationMs,
       pronunciation_score: feedback.pronunciation_score,
       accent_score: feedback.accent_score,
+      fluency_score: feedback.fluency_score,
       naturalness_score: feedback.naturalness_score,
       completeness_score: feedback.completeness_score,
       feedback_summary: feedback.summary,
       accent_focus: feedback.accent_focus,
       pronunciation_drill: feedback.pronunciation_drill,
+      audio_note: feedback.audio_note,
       better_version: feedback.better_version,
       next_step: feedback.next_step,
     };
@@ -679,6 +778,8 @@ export default function Home() {
           user_id: sessionInsert.user_id,
           expression_id: sessionInsert.expression_id,
           transcript: sessionInsert.transcript,
+          input_mode: sessionInsert.input_mode,
+          audio_duration_ms: sessionInsert.audio_duration_ms,
           pronunciation_score: sessionInsert.pronunciation_score,
           naturalness_score: sessionInsert.naturalness_score,
           completeness_score: sessionInsert.completeness_score,
@@ -688,10 +789,14 @@ export default function Home() {
         data = fallbackResult.data
           ? {
               ...fallbackResult.data,
+              input_mode: inputMode,
+              audio_duration_ms: safeDurationMs,
               feedback_summary: feedback.summary,
               accent_score: feedback.accent_score,
+              fluency_score: feedback.fluency_score,
               accent_focus: feedback.accent_focus,
               pronunciation_drill: feedback.pronunciation_drill,
+              audio_note: feedback.audio_note,
               better_version: feedback.better_version,
               next_step: feedback.next_step,
             }
@@ -735,6 +840,8 @@ export default function Home() {
     setIsRecording(false);
     setIsSavingPractice(false);
     setSpokenTranscript(savedTranscript);
+    setPracticeInputMode(inputMode);
+    setAudioDurationMs(safeDurationMs);
     setPracticeFeedback(feedback);
     if (!feedbackWarning && !persistenceWarning) {
       setPracticeVoiceMessage("");
@@ -934,11 +1041,7 @@ export default function Home() {
                 type="button"
                 onClick={() => {
                   recognitionRef.current?.stop();
-                  setShowTranscript(false);
-                  setIsRecording(false);
-                  setSpokenTranscript("");
-                  setPracticeVoiceMessage("");
-                  transcriptRef.current = "";
+                  resetPracticeCapture();
                 }}
               >
                 Start
@@ -976,6 +1079,15 @@ export default function Home() {
                 {isSavingPractice ? "Saving..." : isRecording ? "Stop and save" : showTranscript ? "Record again" : "Start speaking"}
               </button>
               {practiceVoiceMessage && <p className="practice-message">{practiceVoiceMessage}</p>}
+              {practiceAudioUrl && (
+                <div className="audio-review">
+                  <div>
+                    <p className="label">Recorded audio</p>
+                    <span>{(audioDurationMs / 1000).toFixed(1)}s · {practiceInputMode}</span>
+                  </div>
+                  <audio controls src={practiceAudioUrl} />
+                </div>
+              )}
               {isRecording && spokenTranscript && (
                 <div className="live-transcript">
                   <p className="label">Live transcript</p>
@@ -989,6 +1101,7 @@ export default function Home() {
                   <div className="score-row">
                     <span>Pronunciation {practiceFeedback?.pronunciation_score ?? 82}</span>
                     <span>Accent {practiceFeedback?.accent_score ?? 82}</span>
+                    <span>Fluency {practiceFeedback?.fluency_score ?? 84}</span>
                     <span>Naturalness {practiceFeedback?.naturalness_score ?? 88}</span>
                     <span>Completeness {practiceFeedback?.completeness_score ?? 91}</span>
                   </div>
@@ -1003,6 +1116,9 @@ export default function Home() {
                         <b>Drill:</b> {practiceFeedback.pronunciation_drill}
                       </p>
                       <p>
+                        <b>Audio:</b> {practiceFeedback.audio_note}
+                      </p>
+                      <p>
                         <b>Better:</b> {practiceFeedback.better_version}
                       </p>
                       <p>
@@ -1012,14 +1128,14 @@ export default function Home() {
                   )}
                 </div>
               )}
-              {!isRecording && !showTranscript && (
+              {!isRecording && (!showTranscript || (practiceAudioUrl && !spokenTranscript.trim())) && (
                 <div className="manual-transcript">
                   <label htmlFor="manual-transcript">Typed transcript</label>
                   <textarea
                     id="manual-transcript"
                     value={spokenTranscript}
                     onChange={(event) => setSpokenTranscript(event.target.value)}
-                    placeholder="Type what you said if the microphone is blocked."
+                    placeholder="Type what you said if transcription is missing."
                   />
                   <button className="secondary-button" type="button" disabled={isSavingPractice} onClick={saveTypedTranscript}>
                     Save typed transcript
@@ -1047,7 +1163,7 @@ export default function Home() {
                     <article className="session-card" key={session.id}>
                       <div className="card-topline">
                         <span>
-                          {session.expressions?.category ?? "Standalone"} ·{" "}
+                          {session.expressions?.category ?? "Standalone"} · {session.input_mode ?? "typed"} ·{" "}
                           {new Intl.DateTimeFormat("en-NZ", {
                             month: "short",
                             day: "numeric",
@@ -1066,16 +1182,23 @@ export default function Home() {
                       <div className="score-row">
                         <span>P {session.pronunciation_score}</span>
                         {session.accent_score !== null && <span>A {session.accent_score}</span>}
+                        {session.fluency_score !== null && <span>F {session.fluency_score}</span>}
                         <span>N {session.naturalness_score}</span>
                         <span>C {session.completeness_score}</span>
                       </div>
                       {(session.feedback_summary ||
                         session.accent_focus ||
                         session.pronunciation_drill ||
+                        session.audio_note ||
                         session.better_version ||
                         session.next_step) && (
                         <div className="session-feedback">
                           {session.feedback_summary && <p>{session.feedback_summary}</p>}
+                          {session.audio_duration_ms !== null && (
+                            <p>
+                              <b>Audio:</b> {(session.audio_duration_ms / 1000).toFixed(1)}s
+                            </p>
+                          )}
                           {session.accent_focus && (
                             <p>
                               <b>Accent:</b> {session.accent_focus}
@@ -1084,6 +1207,11 @@ export default function Home() {
                           {session.pronunciation_drill && (
                             <p>
                               <b>Drill:</b> {session.pronunciation_drill}
+                            </p>
+                          )}
+                          {session.audio_note && (
+                            <p>
+                              <b>Audio note:</b> {session.audio_note}
                             </p>
                           )}
                           {session.better_version && (
