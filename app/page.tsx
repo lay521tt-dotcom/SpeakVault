@@ -101,6 +101,15 @@ const starterLibrary: Expression[] = [
 
 const generatedSamples: Omit<ExpressionInsert, "status">[] = [
   {
+    english: "I’m not sure this is the best option, but we could try it first.",
+    chinese: "我不确定这是最好的选择，但我们可以先试一下。",
+    category: "Work Meeting",
+    difficulty: "Easy",
+    tags: ["testing", "meeting", "soft disagreement"],
+    note: "Simple, clear, and easy to say in a meeting without sounding too direct.",
+    alternatives: ["We could try it first.", "Maybe we can test it first."],
+  },
+  {
     english: "I’m not completely sure this is the best approach, but I think it’s worth trialling first.",
     chinese: "我不完全确定这是最优方案，但我觉得值得先试一下。",
     category: "Work Meeting",
@@ -110,22 +119,13 @@ const generatedSamples: Omit<ExpressionInsert, "status">[] = [
     alternatives: ["It might be worth testing first.", "We could try it and review the outcome."],
   },
   {
-    english: "I’m not fully convinced it’s the optimal option yet, but we could test it and see how it goes.",
-    chinese: "我还不完全相信这是最优选择，但我们可以测试一下看看效果。",
+    english: "I’m not fully convinced it’s the optimal option yet, but we could test it and review the outcome.",
+    chinese: "我还不完全相信这是最优选择，但我们可以测试一下并复盘结果。",
     category: "Work Meeting",
     difficulty: "Advanced",
     tags: ["strategy", "disagreeing", "professional"],
     note: "“Not fully convinced” is professional and softer than saying “I disagree”.",
     alternatives: ["I’m not totally sold on it yet.", "I’d like to see how it performs first."],
-  },
-  {
-    english: "It might not be perfect, but I’m happy to give it a go and review the outcome.",
-    chinese: "它可能不是完美方案，但我愿意先试试，再看结果。",
-    category: "Work Meeting",
-    difficulty: "Softer",
-    tags: ["NZ English", "team chat", "trial"],
-    note: "“Give it a go” is conversational and common in New Zealand.",
-    alternatives: ["Let’s give it a go.", "We can try it and revisit it later."],
   },
 ];
 
@@ -959,20 +959,6 @@ export default function Home() {
                 {isSavingPractice ? "Saving..." : isRecording ? "Stop and save" : showTranscript ? "Record again" : "Start speaking"}
               </button>
               {practiceVoiceMessage && <p className="practice-message">{practiceVoiceMessage}</p>}
-              {!isRecording && (
-                <div className="manual-transcript">
-                  <label htmlFor="manual-transcript">Typed transcript</label>
-                  <textarea
-                    id="manual-transcript"
-                    value={spokenTranscript}
-                    onChange={(event) => setSpokenTranscript(event.target.value)}
-                    placeholder="Type what you said if the microphone is blocked."
-                  />
-                  <button className="secondary-button" type="button" disabled={isSavingPractice} onClick={saveTypedTranscript}>
-                    Save typed transcript
-                  </button>
-                </div>
-              )}
               {isRecording && spokenTranscript && (
                 <div className="live-transcript">
                   <p className="label">Live transcript</p>
@@ -990,6 +976,7 @@ export default function Home() {
                   </div>
                   {practiceFeedback && (
                     <div className="feedback-notes">
+                      <p className="label">AI feedback</p>
                       <p>{practiceFeedback.summary}</p>
                       <p>
                         <b>Better:</b> {practiceFeedback.better_version}
@@ -999,6 +986,20 @@ export default function Home() {
                       </p>
                     </div>
                   )}
+                </div>
+              )}
+              {!isRecording && !showTranscript && (
+                <div className="manual-transcript">
+                  <label htmlFor="manual-transcript">Typed transcript</label>
+                  <textarea
+                    id="manual-transcript"
+                    value={spokenTranscript}
+                    onChange={(event) => setSpokenTranscript(event.target.value)}
+                    placeholder="Type what you said if the microphone is blocked."
+                  />
+                  <button className="secondary-button" type="button" disabled={isSavingPractice} onClick={saveTypedTranscript}>
+                    Save typed transcript
+                  </button>
                 </div>
               )}
               <div className="target-expression">

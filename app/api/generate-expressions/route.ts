@@ -5,7 +5,7 @@ type GeneratedExpression = {
   english: string;
   chinese: string;
   category: string;
-  difficulty: "Easy" | "Natural" | "Advanced" | "Softer" | "Workplace";
+  difficulty: "Easy" | "Natural" | "Advanced";
   tags: string[];
   note: string;
   alternatives: string[];
@@ -30,7 +30,7 @@ const expressionSchema = {
           english: { type: "string" },
           chinese: { type: "string" },
           category: { type: "string" },
-          difficulty: { type: "string", enum: ["Easy", "Natural", "Advanced", "Softer", "Workplace"] },
+          difficulty: { type: "string", enum: ["Easy", "Natural", "Advanced"] },
           tags: {
             type: "array",
             minItems: 2,
@@ -57,7 +57,14 @@ function buildSystemPrompt() {
 }
 
 function buildUserPrompt(thought: string) {
-  return `Chinese thought: ${thought}\n\nReturn exactly 3 options. Make them useful for workplace meetings, daily life, or tax/accounting contexts when relevant. Include Chinese meaning, difficulty, tags, alternatives, and a short note explaining why the expression is natural.`;
+  return `Chinese thought: ${thought}
+
+Return exactly 3 options with this exact difficulty spread:
+1. Easy: the simplest speakable version
+2. Natural: the most useful native-like workplace version
+3. Advanced: a more polished professional version
+
+Make them useful for workplace meetings, daily life, or tax/accounting contexts when relevant. Include Chinese meaning, tags, alternatives, and a short note explaining why the expression is natural.`;
 }
 
 export async function POST(request: Request) {
@@ -72,7 +79,7 @@ export async function POST(request: Request) {
     const provider = process.env.AI_PROVIDER ?? "openai";
     const result = provider === "anthropic" ? await generateWithAnthropic(trimmedThought) : await generateWithOpenAI(trimmedThought);
 
-    return NextResponse.json(result);
+    return NextResponse.json(normalizeDifficulties(result));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown AI provider error.";
     const isQuotaError = message.includes("429") || message.toLowerCase().includes("quota");
@@ -85,6 +92,17 @@ export async function POST(request: Request) {
       { status: isQuotaError ? 429 : isModelError ? 404 : 500 },
     );
   }
+}
+
+function normalizeDifficulties(result: GenerateExpressionsResult): GenerateExpressionsResult {
+  const difficulties: GeneratedExpression["difficulty"][] = ["Easy", "Natural", "Advanced"];
+
+  return {
+    expressions: result.expressions.slice(0, 3).map((expression, index) => ({
+      ...expression,
+      difficulty: difficulties[index] ?? "Natural",
+    })),
+  };
 }
 
 function getProviderErrorMessage(message: string, isQuotaError: boolean, isModelError: boolean) {
