@@ -490,6 +490,15 @@ export default function Home() {
     return error instanceof Error ? error.message : "Network request failed.";
   }
 
+  function isMissingFeedbackColumns(message: string) {
+    return (
+      message.includes("feedback_summary") ||
+      message.includes("better_version") ||
+      message.includes("next_step") ||
+      message.includes("schema cache")
+    );
+  }
+
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAuthMessage("");
@@ -593,6 +602,7 @@ export default function Home() {
 
     const isSavedExpression = practiceExpression.user_id === user.id;
     let feedbackWarning = "";
+    let persistenceWarning = "";
     let feedback: PracticeFeedback = {
       pronunciation_score: 82,
       naturalness_score: 88,
@@ -628,19 +638,51 @@ export default function Home() {
       setPracticeVoiceMessage(feedbackWarning);
     }
 
+    const sessionInsert = {
+      user_id: user.id,
+      expression_id: isSavedExpression ? practiceExpression.id : null,
+      transcript: savedTranscript,
+      pronunciation_score: feedback.pronunciation_score,
+      naturalness_score: feedback.naturalness_score,
+      completeness_score: feedback.completeness_score,
+      feedback_summary: feedback.summary,
+      better_version: feedback.better_version,
+      next_step: feedback.next_step,
+    };
+
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("practice_sessions")
-        .insert({
-          user_id: user.id,
-          expression_id: isSavedExpression ? practiceExpression.id : null,
-          transcript: savedTranscript,
-          pronunciation_score: feedback.pronunciation_score,
-          naturalness_score: feedback.naturalness_score,
-          completeness_score: feedback.completeness_score,
-        })
+        .insert(sessionInsert)
         .select()
         .single();
+
+      if (error && isMissingFeedbackColumns(error.message)) {
+        const fallbackInsert = {
+          user_id: sessionInsert.user_id,
+          expression_id: sessionInsert.expression_id,
+          transcript: sessionInsert.transcript,
+          pronunciation_score: sessionInsert.pronunciation_score,
+          naturalness_score: sessionInsert.naturalness_score,
+          completeness_score: sessionInsert.completeness_score,
+        };
+        const fallbackResult = await supabase.from("practice_sessions").insert(fallbackInsert).select().single();
+
+        data = fallbackResult.data
+          ? {
+              ...fallbackResult.data,
+              feedback_summary: feedback.summary,
+              better_version: feedback.better_version,
+              next_step: feedback.next_step,
+            }
+          : fallbackResult.data;
+        error = fallbackResult.error;
+
+        if (!feedbackWarning) {
+          persistenceWarning = "AI feedback is shown below. Run supabase/practice_feedback.sql to save feedback into history.";
+          setPracticeVoiceMessage(persistenceWarning);
+        }
+      }
 
       if (error) {
         if (error.message.includes("practice_sessions")) {
@@ -677,7 +719,7 @@ export default function Home() {
     setIsSavingPractice(false);
     setSpokenTranscript(savedTranscript);
     setPracticeFeedback(feedback);
-    if (!feedbackWarning) {
+    if (!feedbackWarning && !persistenceWarning) {
       setPracticeVoiceMessage("");
     }
   }
@@ -1001,6 +1043,21 @@ export default function Home() {
                         <span>N {session.naturalness_score}</span>
                         <span>C {session.completeness_score}</span>
                       </div>
+                      {(session.feedback_summary || session.better_version || session.next_step) && (
+                        <div className="session-feedback">
+                          {session.feedback_summary && <p>{session.feedback_summary}</p>}
+                          {session.better_version && (
+                            <p>
+                              <b>Better:</b> {session.better_version}
+                            </p>
+                          )}
+                          {session.next_step && (
+                            <p>
+                              <b>Next:</b> {session.next_step}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </article>
                   ))
                 )}

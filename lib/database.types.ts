@@ -25,6 +25,9 @@ export type PracticeSession = {
   pronunciation_score: number;
   naturalness_score: number;
   completeness_score: number;
+  feedback_summary: string | null;
+  better_version: string | null;
+  next_step: string | null;
   created_at: string;
 };
 
@@ -74,6 +77,9 @@ export type Database = {
           pronunciation_score: number;
           naturalness_score: number;
           completeness_score: number;
+          feedback_summary?: string | null;
+          better_version?: string | null;
+          next_step?: string | null;
           created_at?: string;
         };
         Update: Partial<{
@@ -81,6 +87,9 @@ export type Database = {
           pronunciation_score: number;
           naturalness_score: number;
           completeness_score: number;
+          feedback_summary: string | null;
+          better_version: string | null;
+          next_step: string | null;
         }>;
         Relationships: [];
       };

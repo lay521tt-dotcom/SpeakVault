@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "SpeakVault",
   description: "A personal English speaking vault for workplace-ready expressions.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export const viewport: Viewport = {

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SpeakVault icon">
+  <rect width="512" height="512" rx="96" fill="#f4f1ec"/>
+  <rect x="112" y="150" width="288" height="234" rx="44" fill="#ffffff" stroke="#23211f" stroke-width="18"/>
+  <path d="M176 154v-18c0-48 36-84 80-84s80 36 80 84v18" fill="none" stroke="#2f6f68" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="256" cy="266" r="26" fill="#2f6f68"/>
+  <path d="M256 292v48" stroke="#2f6f68" stroke-width="20" stroke-linecap="round"/>
+  <path d="M160 420h192" stroke="#a15c38" stroke-width="18" stroke-linecap="round"/>
+</svg>

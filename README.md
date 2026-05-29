@@ -1,21 +1,27 @@
-# SpeakVault
+# SpeakVault v1.0
 
-SpeakVault is a personal English speaking web app for building a private vault of workplace-ready expressions.
+SpeakVault is a personal English speaking web app for building a private vault of workplace-ready expressions, practising them aloud, and turning each practice attempt into feedback.
 
-The current version is a Next.js clickable product foundation with:
+This v1.0 build is tailored for a Chinese native speaker in Auckland working as a tax accountant, with NZ/AU workplace English as the default style.
 
-- Email-style login prototype
-- Practice dashboard
-- Chinese thought to English expression generation prototype
-- Searchable expression library
-- Adaptive 30-day plan screen
-- Profile and preference screen
-- Mobile-first PWA metadata
+## Features
 
-## Run Locally
+- Supabase email/password authentication
+- AI expression generation from Chinese thoughts
+- Searchable private expression library
+- Categories, tags, alternatives, notes, and mastery status
+- Browser speech recognition with `en-NZ` language mode
+- Typed transcript fallback when microphone access is blocked
+- AI practice evaluation with pronunciation, naturalness, and completeness scores
+- Practice history with persisted transcripts, scores, and feedback
+- Adaptive review queue and 30-day plan focus
+- Mobile-first PWA shell with manifest and app icon
+
+## Local Setup
 
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
@@ -27,34 +33,36 @@ http://localhost:3000
 
 ## Environment
 
-Create `.env.local` from `.env.example`:
-
-```bash
-cp .env.example .env.local
-```
-
-Set:
+Set these values in `.env.local`:
 
 ```txt
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-OPENAI_API_KEY=
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your-anthropic-api-key
+ANTHROPIC_MODEL=claude-haiku-4-5-20251001
+
+OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-5.4-mini
 ```
 
+Use `AI_PROVIDER=anthropic` for Claude or `AI_PROVIDER=openai` for OpenAI.
+
 ## Supabase Setup
 
-Run the SQL in [supabase/schema.sql](supabase/schema.sql) inside the Supabase SQL editor.
+Run these files in the Supabase SQL editor:
 
-This creates:
+1. `supabase/schema.sql`
+2. `supabase/practice_sessions.sql`
 
-- `expressions` table
-- `mastery_status` enum
-- row-level security policies so each user can only access their own expressions
-- indexes for library queries
-- `updated_at` trigger
+If you already created `practice_sessions` before v1.0, also run:
 
-Then run [supabase/practice_sessions.sql](supabase/practice_sessions.sql) to enable practice history.
+```txt
+supabase/practice_feedback.sql
+```
+
+That migration adds feedback persistence columns to existing projects.
 
 ## Verification
 
@@ -63,9 +71,6 @@ npm run typecheck
 npm run build
 ```
 
-## Next Milestones
+## v1.0 Notes
 
-1. Deploy the app to Vercel with Supabase and OpenAI environment variables.
-2. Add expression editing, delete, and mastery-status updates.
-3. Add recording, transcription, and speaking feedback.
-4. Add daily practice history and adaptive plan tracking.
+The app gracefully handles temporary Supabase or AI failures. If AI feedback is unavailable, practice sessions still save with fallback scores. If the feedback migration has not been applied, feedback still appears immediately after practice and the app tells you which SQL file to run to persist it in history.
