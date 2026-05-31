@@ -14,6 +14,12 @@ type GeneratedExpression = {
 type GenerateExpressionsResult = {
   expressions: GeneratedExpression[];
 };
+type ProfileContext = {
+  role?: string;
+  major?: string;
+  location?: string;
+  english_style?: string;
+};
 
 const expressionSchema = {
   type: "object",
@@ -52,23 +58,44 @@ const expressionSchema = {
   required: ["expressions"],
 } as const;
 
-function buildSystemPrompt() {
-  return "You are SpeakVault, an English speaking coach for a Chinese native speaker living in Auckland, New Zealand and working as a tax accountant. Generate practical NZ/AU workplace English that is natural, concise, and speakable. Do not translate literally. Preserve the user's intent while making the expression more native-like and professional.";
+function normalizeProfile(profile?: ProfileContext) {
+  return {
+    role: profile?.role || "Tax Accountant",
+    major: profile?.major || "",
+    location: profile?.location || "New Zealand",
+    englishStyle: profile?.english_style || "New Zealand",
+  };
 }
 
-function buildUserPrompt(thought: string) {
+function buildSystemPrompt(profile?: ProfileContext) {
+  const context = normalizeProfile(profile);
+  const learnerContext =
+    context.role === "Student"
+      ? `a student in ${context.location}${context.major ? ` majoring in ${context.major}` : ""}`
+      : `someone in ${context.location} working as a ${context.role}`;
+
+  return `You are SpeakVault, an English speaking coach for a Chinese native speaker who is ${learnerContext}. Generate practical ${context.englishStyle} English that is natural, concise, and speakable. Do not translate literally. Preserve the user's intent while making the expression more native-like and appropriate for the learner's role, location, and English style.`;
+}
+
+function buildUserPrompt(thought: string, profile?: ProfileContext) {
+  const context = normalizeProfile(profile);
+
   return `Chinese thought: ${thought}
+Role: ${context.role}
+Major: ${context.major || "N/A"}
+Location: ${context.location}
+English style: ${context.englishStyle}
 
 Return exactly 3 options with this exact difficulty spread:
 1. Easy: the simplest speakable version
 2. Natural: the most useful native-like workplace version
 3. Advanced: a more polished professional version
 
-Make them useful for workplace meetings, daily life, or tax/accounting contexts when relevant. Include Chinese meaning, tags, alternatives, and a short note explaining why the expression is natural.`;
+Make them useful for the learner's profile, daily life, work, or study context when relevant. Include Chinese meaning, tags, alternatives, and a short note explaining why the expression is natural in the selected English style.`;
 }
 
 export async function POST(request: Request) {
-  const { thought } = (await request.json()) as { thought?: string };
+  const { thought, profile } = (await request.json()) as { thought?: string; profile?: ProfileContext };
   const trimmedThought = thought?.trim();
 
   if (!trimmedThought) {
@@ -77,7 +104,10 @@ export async function POST(request: Request) {
 
   try {
     const provider = process.env.AI_PROVIDER ?? "openai";
-    const result = provider === "anthropic" ? await generateWithAnthropic(trimmedThought) : await generateWithOpenAI(trimmedThought);
+    const result =
+      provider === "anthropic"
+        ? await generateWithAnthropic(trimmedThought, profile)
+        : await generateWithOpenAI(trimmedThought, profile);
 
     return NextResponse.json(normalizeDifficulties(result));
   } catch (error) {
@@ -119,11 +149,11 @@ function getProviderErrorMessage(message: string, isQuotaError: boolean, isModel
   return message;
 }
 
-async function generateWithOpenAI(thought: string): Promise<GenerateExpressionsResult> {
+async function generateWithOpenAI(thought: string, profile?: ProfileContext): Promise<GenerateExpressionsResult> {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("Missing OPENAI_API_KEY. Add it to .env.local and restart the dev server.");
+    throw new Error("Missing OPENAI_API_KEY. Add it to the server environment variables and restart or redeploy.");
   }
 
   const openai = new OpenAI({ apiKey });
@@ -132,11 +162,11 @@ async function generateWithOpenAI(thought: string): Promise<GenerateExpressionsR
     input: [
       {
         role: "system",
-        content: buildSystemPrompt(),
+        content: buildSystemPrompt(profile),
       },
       {
         role: "user",
-        content: buildUserPrompt(thought),
+        content: buildUserPrompt(thought, profile),
       },
     ],
     text: {
@@ -152,11 +182,11 @@ async function generateWithOpenAI(thought: string): Promise<GenerateExpressionsR
   return JSON.parse(response.output_text) as GenerateExpressionsResult;
 }
 
-async function generateWithAnthropic(thought: string): Promise<GenerateExpressionsResult> {
+async function generateWithAnthropic(thought: string, profile?: ProfileContext): Promise<GenerateExpressionsResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
-    throw new Error("Missing ANTHROPIC_API_KEY. Add it to .env.local and restart the dev server.");
+    throw new Error("Missing ANTHROPIC_API_KEY. Add it to the server environment variables and restart or redeploy.");
   }
 
   const configuredModel = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
@@ -176,11 +206,11 @@ async function generateWithAnthropic(thought: string): Promise<GenerateExpressio
     body: JSON.stringify({
       model,
       max_tokens: 1800,
-      system: buildSystemPrompt(),
+      system: buildSystemPrompt(profile),
       messages: [
         {
           role: "user",
-          content: buildUserPrompt(thought),
+          content: buildUserPrompt(thought, profile),
         },
       ],
       tools: [

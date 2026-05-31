@@ -1,11 +1,11 @@
 {
   "name": "SpeakVault",
   "short_name": "SpeakVault",
-  "description": "A personal English speaking vault for workplace-ready expressions.",
+  "description": "A private English speaking web app for building workplace-ready expressions and practising aloud.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fbfaf8",
-  "theme_color": "#fbfaf8",
+  "theme_color": "#2f6f68",
   "icons": [
     {
       "src": "/icon.svg",

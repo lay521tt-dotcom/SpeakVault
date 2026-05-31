@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SpeakVault",
-  description: "A personal English speaking vault for workplace-ready expressions.",
+  title: "SpeakVault | English Speaking Web App",
+  description: "A private English speaking web app for building workplace-ready expressions and practising aloud.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",
@@ -14,7 +14,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#fbfaf8",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbfaf8" },
+    { media: "(prefers-color-scheme: dark)", color: "#101413" },
+  ],
 };
 
 export default function RootLayout({

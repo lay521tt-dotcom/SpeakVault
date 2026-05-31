@@ -2,7 +2,16 @@
 
 import type { User } from "@supabase/supabase-js";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { Expression, ExpressionInsert, MasteryStatus, PracticeSessionWithExpression } from "../lib/database.types";
+import type {
+  EnglishStyle,
+  Expression,
+  ExpressionInsert,
+  MasteryStatus,
+  PracticeSessionWithExpression,
+  UserProfile,
+  UserRole,
+  VisualStyle,
+} from "../lib/database.types";
 import { supabase } from "../lib/supabase";
 
 type ViewName = "practice" | "generate" | "library" | "plan" | "profile";
@@ -30,6 +39,32 @@ type PracticeFeedback = {
   next_step: string;
 };
 type PracticeInputMode = "voice" | "typed";
+type AppLanguage = "en" | "zh";
+type ProfileContext = Pick<UserProfile, "role" | "major" | "location" | "english_style">;
+type ProfileUpdate = Partial<
+  Pick<
+    UserProfile,
+    | "role"
+    | "major"
+    | "location"
+    | "english_style"
+    | "visual_style"
+    | "active_plan_key"
+    | "active_plan_started_on"
+    | "active_plan_completed_days"
+    | "completed_plan_keys"
+  >
+>;
+type WeeklyPlan = {
+  key: string;
+  audience: string;
+  title: string;
+  copy: string;
+  tasks: Array<{
+    title: string;
+    copy: string;
+  }>;
+};
 type SpeechRecognitionAlternativeLike = {
   transcript: string;
 };
@@ -135,24 +170,456 @@ const generatedSamples: Omit<ExpressionInsert, "status">[] = [
   },
 ];
 
-const viewTitles: Record<ViewName, string> = {
-  practice: "Practice",
-  generate: "Generate",
-  library: "Library",
-  plan: "Plan",
-  profile: "Profile",
+const roleOptions: UserRole[] = [
+  "Tax Accountant",
+  "Accountant",
+  "Auditor",
+  "Software / IT",
+  "Business / Admin",
+  "Healthcare",
+  "Hospitality / Retail",
+  "Student",
+  "Other",
+];
+const majorOptions = ["Accounting", "Finance", "Business", "IT", "Engineering", "Healthcare", "Nursing", "Education", "Other"];
+const locationOptions = ["New Zealand", "Australia", "United Kingdom", "United States", "Canada", "Other"];
+const englishStyleOptions: EnglishStyle[] = ["New Zealand", "Australian", "British", "American", "Canadian"];
+const visualStyleOptions: VisualStyle[] = ["System", "Light", "Dark"];
+
+const defaultProfileContext: ProfileContext = {
+  role: "Tax Accountant",
+  major: "",
+  location: "New Zealand",
+  english_style: "New Zealand",
 };
+
+const weeklyPlans: WeeklyPlan[] = [
+  {
+    key: "tax-accountant-client-clarity",
+    audience: "Tax Accountant",
+    title: "Client-ready tax conversations",
+    copy: "A focused week for explaining figures, asking for documents, and sounding calm with deadlines.",
+    tasks: [
+      { title: "Clarify a figure", copy: "Ask whether a number is based on the latest client information." },
+      { title: "Request missing documents", copy: "Ask for bank statements or receipts without sounding demanding." },
+      { title: "Explain a tax issue", copy: "Explain one tax return issue in plain, client-friendly English." },
+      { title: "Buy more time", copy: "Ask for extra time while keeping confidence and ownership." },
+      { title: "Raise a concern", copy: "Flag a potential issue softly before proposing the next step." },
+      { title: "Summarise next steps", copy: "Close a conversation with two clear next actions." },
+      { title: "Review and reuse", copy: "Record your best three sentences from this week from memory." },
+    ],
+  },
+  {
+    key: "accounting-workplace-updates",
+    audience: "Accountant",
+    title: "Accounting updates and checks",
+    copy: "Practise concise updates, reconciliations, and follow-up language for finance teams.",
+    tasks: [
+      { title: "Give a status update", copy: "Summarise what is done, pending, and blocked in 20 seconds." },
+      { title: "Check assumptions", copy: "Confirm the basis of a calculation before finalising it." },
+      { title: "Explain a variance", copy: "Describe why a number changed without over-explaining." },
+      { title: "Ask for review", copy: "Invite a manager to review your work with a specific question." },
+      { title: "Handle a correction", copy: "Acknowledge an error and explain how you will fix it." },
+      { title: "Close the loop", copy: "Send a spoken follow-up confirming the completed action." },
+      { title: "Weekly recap", copy: "Record a one-minute recap of your accounting work this week." },
+    ],
+  },
+  {
+    key: "audit-evidence-questions",
+    audience: "Auditor",
+    title: "Audit evidence conversations",
+    copy: "Build confident language for evidence requests, follow-up questions, and risk discussions.",
+    tasks: [
+      { title: "Request evidence", copy: "Ask for supporting documents with a clear reason." },
+      { title: "Ask a follow-up", copy: "Probe an unclear answer politely." },
+      { title: "Discuss a risk", copy: "Explain a risk without sounding accusatory." },
+      { title: "Confirm scope", copy: "Clarify what period, entity, or transaction you are reviewing." },
+      { title: "Challenge softly", copy: "Disagree with an explanation while keeping rapport." },
+      { title: "Summarise findings", copy: "Give a concise spoken summary of one finding." },
+      { title: "Review and reuse", copy: "Turn three audit questions into reusable expressions." },
+    ],
+  },
+  {
+    key: "student-academic-confidence",
+    audience: "Student",
+    title: "Study and class confidence",
+    copy: "A weekly plan for tutorials, group work, lecturer questions, and explaining your major clearly.",
+    tasks: [
+      { title: "Introduce your major", copy: "Explain what you study and why in a natural way." },
+      { title: "Ask a lecturer", copy: "Ask for clarification after a lecture or tutorial." },
+      { title: "Group assignment", copy: "Suggest a next step in a group project." },
+      { title: "Explain a concept", copy: "Explain one idea from your major in simple English." },
+      { title: "Disagree politely", copy: "Push back on a group suggestion without sounding harsh." },
+      { title: "Presentation warm-up", copy: "Give a 30-second mini presentation on a familiar topic." },
+      { title: "Weekly reflection", copy: "Record what you learned and what you still find difficult." },
+    ],
+  },
+  {
+    key: "general-workplace-speaking",
+    audience: "General",
+    title: "Workplace speaking foundations",
+    copy: "Useful meeting and small-talk practice for a wide range of roles.",
+    tasks: [
+      { title: "Make small talk", copy: "Start a light workplace conversation before a meeting." },
+      { title: "Ask for clarification", copy: "Ask someone to repeat or explain a point naturally." },
+      { title: "Give an update", copy: "Share progress, blockers, and next steps." },
+      { title: "Interrupt politely", copy: "Add a point without taking over the conversation." },
+      { title: "Make a suggestion", copy: "Propose a practical option and invite feedback." },
+      { title: "Handle uncertainty", copy: "Say you are not sure and explain what you will check." },
+      { title: "Weekly recap", copy: "Record a one-minute recap using five expressions from the week." },
+    ],
+  },
+];
+
+const translations = {
+  en: {
+    viewTitles: {
+      practice: "Practice",
+      generate: "Generate",
+      library: "Library",
+      plan: "Plan",
+      profile: "Profile",
+    },
+    nav: {
+      practice: "Practice",
+      generate: "Generate",
+      library: "Library",
+      plan: "Plan",
+      profile: "Profile",
+    },
+    common: {
+      day: "7-day plan",
+      loading: "Loading SpeakVault...",
+      close: "Close",
+      save: "Save",
+      saving: "Saving...",
+      cancel: "Cancel",
+      saved: "Saved",
+      updating: "Updating...",
+      chinese: "Chinese",
+      better: "Better",
+      next: "Next",
+      audio: "Audio",
+      accent: "Accent",
+      drill: "Drill",
+      complete: "Complete",
+      completed: "Completed",
+    },
+    auth: {
+      eyebrow: "Personal fluency system",
+      tagline: "Build a private vault of workplace-ready English you can actually say.",
+      signIn: "Sign in",
+      createAccount: "Create account",
+      email: "Email",
+      password: "Password",
+      passwordPlaceholder: "At least 6 characters",
+      working: "Working...",
+    },
+    practice: {
+      mission: "Today's mission",
+      missionCopy: "Look at the Chinese prompt, say the English out loud, then compare it with your target expression.",
+      start: "Start",
+      today: "today",
+      recent: "recent",
+      last: "last",
+      prompt: "Speaking prompt",
+      startSpeaking: "Start speaking",
+      stopAndSave: "Stop and save",
+      recordAgain: "Record again",
+      recordedAudio: "Recorded audio",
+      liveTranscript: "Live transcript",
+      yourTranscript: "Your transcript",
+      aiFeedback: "AI feedback",
+      accentFocus: "Accent focus",
+      audioNote: "Audio",
+      targetExpression: "Target expression",
+      typedTranscript: "Typed transcript",
+      transcriptPlaceholder: "Type what you said if transcription is missing.",
+      saveTypedTranscript: "Save typed transcript",
+      recentPractice: "Recent practice",
+      savedCount: "saved",
+      noSessions: "No practice sessions yet. Record once to start your history.",
+      promptLabel: "Prompt",
+      reviewQueue: "Review queue",
+      viewAll: "View all",
+      pronunciation: "Pronunciation",
+      fluency: "Fluency",
+      naturalness: "Naturalness",
+      completeness: "Completeness",
+    },
+    generate: {
+      thoughtLabel: "Chinese thought",
+      button: "Generate 3 expressions",
+      generating: "Generating...",
+      why: "Why it works",
+      saveToLibrary: "Save to Library",
+    },
+    library: {
+      search: "Search expressions or tags",
+      filters: ["All", "Work Meeting", "Small Talk", "Struggling"],
+      loadingTitle: "Loading your vault...",
+      loadingCopy: "Fetching your saved expressions from Supabase.",
+      emptyTitle: "Your vault is empty",
+      emptyCopy: "Go to Generate, save an expression, and it will appear here.",
+      details: "Expression details",
+      english: "English",
+      chinese: "Chinese",
+      category: "Category",
+      difficulty: "Difficulty",
+      why: "Why it works",
+      alternatives: "Alternatives",
+      tags: "Tags",
+      mastery: "Mastery status",
+      practiceThis: "Practice this",
+      edit: "Edit expression",
+      delete: "Delete expression",
+      saveChanges: "Save changes",
+    },
+    plan: {
+      eyebrow: "Weekly plan",
+      progress: "completed",
+      startNext: "Start next weekly plan",
+      nextWeekReady: "Next weekly plan will start on Monday after all 7 days are complete.",
+    },
+    profile: {
+      role: "Role and location",
+      roleLabel: "Role",
+      majorLabel: "Major",
+      locationLabel: "Location",
+      englishStyle: "English style",
+      language: "System language",
+      visualStyle: "Visual style",
+      loginSecurity: "Login security",
+      supabaseAuth: "Supabase Auth",
+      profileSync: "Profile sync",
+      supabaseProfile: "Supabase profile",
+      session: "Session",
+      signOut: "Sign out",
+    },
+  },
+  zh: {
+    viewTitles: {
+      practice: "练习",
+      generate: "生成",
+      library: "语料库",
+      plan: "计划",
+      profile: "我的",
+    },
+    nav: {
+      practice: "练习",
+      generate: "生成",
+      library: "语料库",
+      plan: "计划",
+      profile: "我的",
+    },
+    common: {
+      day: "7 天计划",
+      loading: "正在加载 SpeakVault...",
+      close: "关闭",
+      save: "保存",
+      saving: "保存中...",
+      cancel: "取消",
+      saved: "已保存",
+      updating: "更新中...",
+      chinese: "中文",
+      better: "更自然说法",
+      next: "下一步",
+      audio: "音频",
+      accent: "口音",
+      drill: "跟练",
+      complete: "完成",
+      completed: "已完成",
+    },
+    auth: {
+      eyebrow: "个人口语训练系统",
+      tagline: "建立一个你真正说得出口的职场英语语料库。",
+      signIn: "登录",
+      createAccount: "创建账号",
+      email: "邮箱",
+      password: "密码",
+      passwordPlaceholder: "至少 6 位字符",
+      working: "处理中...",
+    },
+    practice: {
+      mission: "今日任务",
+      missionCopy: "看中文提示，先大声说英文，再和目标表达对比。",
+      start: "开始",
+      today: "今天",
+      recent: "最近",
+      last: "上次",
+      prompt: "口语提示",
+      startSpeaking: "开始说话",
+      stopAndSave: "停止并保存",
+      recordAgain: "重新录音",
+      recordedAudio: "录音回放",
+      liveTranscript: "实时转写",
+      yourTranscript: "你的转写",
+      aiFeedback: "AI 反馈",
+      accentFocus: "口音重点",
+      audioNote: "音频说明",
+      targetExpression: "目标表达",
+      typedTranscript: "手动输入转写",
+      transcriptPlaceholder: "如果没有自动转写，请输入你刚才说的英文。",
+      saveTypedTranscript: "保存手动转写",
+      recentPractice: "最近练习",
+      savedCount: "条记录",
+      noSessions: "还没有练习记录。录一次音开始积累历史。",
+      promptLabel: "提示",
+      reviewQueue: "复习队列",
+      viewAll: "查看全部",
+      pronunciation: "发音",
+      fluency: "流利度",
+      naturalness: "自然度",
+      completeness: "完整度",
+    },
+    generate: {
+      thoughtLabel: "中文想法",
+      button: "生成 3 条表达",
+      generating: "生成中...",
+      why: "为什么自然",
+      saveToLibrary: "保存到语料库",
+    },
+    library: {
+      search: "搜索表达或标签",
+      filters: ["全部", "工作会议", "闲聊", "容易忘"],
+      loadingTitle: "正在加载语料库...",
+      loadingCopy: "正在从 Supabase 获取你保存的表达。",
+      emptyTitle: "语料库还是空的",
+      emptyCopy: "去生成页保存一条表达，它会出现在这里。",
+      details: "表达详情",
+      english: "英文",
+      chinese: "中文",
+      category: "分类",
+      difficulty: "难度",
+      why: "为什么自然",
+      alternatives: "替代表达",
+      tags: "标签",
+      mastery: "掌握状态",
+      practiceThis: "练这条",
+      edit: "编辑表达",
+      delete: "删除表达",
+      saveChanges: "保存修改",
+    },
+    plan: {
+      eyebrow: "每周计划",
+      progress: "已完成",
+      startNext: "开始下一周计划",
+      nextWeekReady: "完成 7 天任务后，下一套计划会在周一开始。",
+    },
+    profile: {
+      role: "职位与地点",
+      roleLabel: "职位",
+      majorLabel: "专业",
+      locationLabel: "地点",
+      englishStyle: "English style",
+      language: "系统语言",
+      visualStyle: "视觉风格",
+      loginSecurity: "登录安全",
+      supabaseAuth: "Supabase Auth",
+      profileSync: "Profile 同步",
+      supabaseProfile: "Supabase Profile",
+      session: "会话",
+      signOut: "退出登录",
+    },
+  },
+} as const;
 
 const masteryStatuses: MasteryStatus[] = ["New", "Practising", "Struggling", "Mastered"];
 
+function getTodayDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getMondayStart(date: Date) {
+  const start = new Date(date);
+  const day = start.getDay();
+  const daysSinceMonday = day === 0 ? 6 : day - 1;
+
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - daysSinceMonday);
+
+  return start;
+}
+
+function isNewPlanWeekAvailable(startedOn: string) {
+  const startedAt = new Date(`${startedOn}T00:00:00`);
+  const currentWeek = getMondayStart(new Date());
+  const startedWeek = getMondayStart(startedAt);
+
+  return currentWeek.getTime() > startedWeek.getTime();
+}
+
+function getProfileContext(profile: UserProfile | null): ProfileContext {
+  return profile
+    ? {
+        role: profile.role,
+        major: profile.major,
+        location: profile.location,
+        english_style: profile.english_style,
+      }
+    : defaultProfileContext;
+}
+
+function getDefaultProfile(userId: string): UserProfile {
+  return {
+    user_id: userId,
+    ...defaultProfileContext,
+    visual_style: "System",
+    active_plan_key: weeklyPlans[0].key,
+    active_plan_started_on: getTodayDateKey(),
+    active_plan_completed_days: [],
+    completed_plan_keys: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function getPlanAudience(profile: UserProfile | null) {
+  const context = getProfileContext(profile);
+
+  if (context.role === "Student") return "Student";
+  if (["Tax Accountant", "Accountant", "Auditor"].includes(context.role)) return context.role;
+  return "General";
+}
+
+function getMatchingPlans(profile: UserProfile | null) {
+  const audience = getPlanAudience(profile);
+  return weeklyPlans.filter((plan) => plan.audience === audience || plan.audience === "General");
+}
+
+function getActivePlan(profile: UserProfile | null) {
+  const matchingPlans = getMatchingPlans(profile);
+  const activePlan = matchingPlans.find((plan) => plan.key === profile?.active_plan_key);
+
+  return activePlan ?? matchingPlans[0] ?? weeklyPlans[weeklyPlans.length - 1];
+}
+
+function getNextPlan(profile: UserProfile | null) {
+  const matchingPlans = getMatchingPlans(profile);
+  const activePlan = getActivePlan(profile);
+  const currentIndex = matchingPlans.findIndex((plan) => plan.key === activePlan.key);
+
+  return matchingPlans[(currentIndex + 1) % matchingPlans.length] ?? activePlan;
+}
+
+function shouldRollOverWeeklyPlan(profile: UserProfile) {
+  const activePlan = getActivePlan(profile);
+  const isComplete = profile.active_plan_completed_days.length >= activePlan.tasks.length;
+
+  return isComplete && isNewPlanWeekAvailable(profile.active_plan_started_on);
+}
+
 export default function Home() {
   const [activeView, setActiveView] = useState<ViewName>("practice");
+  const [appLanguage, setAppLanguage] = useState<AppLanguage>("en");
   const [authMode, setAuthMode] = useState<AuthMode>("sign-in");
-  const [authEmail, setAuthEmail] = useState("you@auckland.nz");
+  const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [spokenTranscript, setSpokenTranscript] = useState("");
@@ -190,8 +657,14 @@ export default function Home() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingStartedAtRef = useRef(0);
+  const t = translations[appLanguage];
 
   useEffect(() => {
+    const storedLanguage = window.localStorage.getItem("speakvault-language");
+    if (storedLanguage === "en" || storedLanguage === "zh") {
+      setAppLanguage(storedLanguage);
+    }
+
     supabase.auth
       .getSession()
       .then(({ data }) => {
@@ -214,6 +687,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    window.localStorage.setItem("speakvault-language", appLanguage);
+    document.documentElement.lang = appLanguage === "zh" ? "zh-CN" : "en";
+  }, [appLanguage]);
+
+  useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
       mediaRecorderRef.current?.stop();
@@ -229,12 +707,33 @@ export default function Home() {
       setLibrary([]);
       setPracticeSessions([]);
       setSelectedExpressionId("");
+      setProfile(null);
       return;
     }
 
+    loadUserProfile(user.id);
     loadExpressions();
     loadPracticeSessions();
   }, [user]);
+
+  useEffect(() => {
+    const selectedTheme = profile?.visual_style ?? "System";
+
+    function applyTheme() {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const resolvedTheme = selectedTheme === "System" ? (prefersDark ? "dark" : "light") : selectedTheme.toLowerCase();
+
+      document.documentElement.dataset.theme = resolvedTheme;
+    }
+
+    applyTheme();
+    if (selectedTheme !== "System") return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    mediaQuery.addEventListener("change", applyTheme);
+
+    return () => mediaQuery.removeEventListener("change", applyTheme);
+  }, [profile?.visual_style]);
 
   const filteredLibrary = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -300,8 +799,195 @@ export default function Home() {
     }
   }
 
+  async function loadUserProfile(userId: string) {
+    setIsProfileLoading(true);
+
+    try {
+      const { data, error } = await supabase.from("user_profiles").select("*").eq("user_id", userId).maybeSingle();
+
+      if (error) {
+        if (error.message.includes("user_profiles")) {
+          setProfile(getDefaultProfile(userId));
+          setAuthMessage("Profile sync is not set up yet. Run supabase/user_profiles.sql in Supabase, then try again.");
+        } else {
+          setAuthMessage(`Could not load profile: ${error.message}`);
+        }
+        return;
+      }
+
+      if (data) {
+        const activePlan = getActivePlan(data);
+        if (data.active_plan_key !== activePlan.key) {
+          const profileUpdate = {
+            active_plan_key: activePlan.key,
+            active_plan_started_on: getTodayDateKey(),
+            active_plan_completed_days: [],
+          };
+          const { data: normalizedProfile, error: normalizeError } = await supabase
+            .from("user_profiles")
+            .update(profileUpdate)
+            .eq("user_id", userId)
+            .select()
+            .single();
+
+          if (normalizeError) {
+            setProfile({
+              ...data,
+              ...profileUpdate,
+            });
+            setAuthMessage(`Could not sync weekly plan: ${normalizeError.message}`);
+          } else {
+            setProfile(normalizedProfile);
+          }
+
+          return;
+        }
+
+        if (shouldRollOverWeeklyPlan(data)) {
+          const nextPlan = getNextPlan(data);
+          const completedPlanKeys = data.completed_plan_keys.includes(activePlan.key)
+            ? data.completed_plan_keys
+            : [...data.completed_plan_keys, activePlan.key];
+          const rolloverUpdate = {
+            active_plan_key: nextPlan.key,
+            active_plan_started_on: getTodayDateKey(),
+            active_plan_completed_days: [],
+            completed_plan_keys: completedPlanKeys,
+          };
+          const { data: rolledProfile, error: rolloverError } = await supabase
+            .from("user_profiles")
+            .update(rolloverUpdate)
+            .eq("user_id", userId)
+            .select()
+            .single();
+
+          if (rolloverError) {
+            setProfile(data);
+            setAuthMessage(`Could not start this week's plan: ${rolloverError.message}`);
+          } else {
+            setProfile(rolledProfile);
+          }
+
+          return;
+        }
+
+        setProfile(data);
+        return;
+      }
+
+      const defaultProfile = getDefaultProfile(userId);
+      const { data: createdProfile, error: createError } = await supabase
+        .from("user_profiles")
+        .insert({
+          user_id: userId,
+          role: defaultProfile.role,
+          major: defaultProfile.major,
+          location: defaultProfile.location,
+          english_style: defaultProfile.english_style,
+          visual_style: defaultProfile.visual_style,
+          active_plan_key: defaultProfile.active_plan_key,
+          active_plan_started_on: defaultProfile.active_plan_started_on,
+          active_plan_completed_days: defaultProfile.active_plan_completed_days,
+          completed_plan_keys: defaultProfile.completed_plan_keys,
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        setProfile(defaultProfile);
+        setAuthMessage(`Could not create profile: ${createError.message}`);
+      } else {
+        setProfile(createdProfile);
+      }
+    } catch (error) {
+      setAuthMessage(`Could not load profile: ${getErrorMessage(error)}`);
+    } finally {
+      setIsProfileLoading(false);
+    }
+  }
+
+  async function updateProfile(updates: ProfileUpdate) {
+    if (!user || !profile) return;
+
+    const nextProfile = {
+      ...profile,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+
+    setProfile(nextProfile);
+    setAuthMessage("");
+
+    try {
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .update(updates)
+        .eq("user_id", user.id)
+        .select()
+        .single();
+
+      if (error) {
+        setAuthMessage(`Could not sync profile: ${error.message}`);
+      } else if (data) {
+        setProfile(data);
+      }
+    } catch (error) {
+      setAuthMessage(`Could not sync profile: ${getErrorMessage(error)}`);
+    }
+  }
+
+  function updateLearningContext(updates: Partial<Pick<UserProfile, "role" | "major" | "location">>) {
+    if (!profile) return;
+
+    const nextProfile = {
+      ...profile,
+      ...updates,
+    };
+    const nextPlan = getMatchingPlans(nextProfile)[0];
+
+    updateProfile({
+      ...updates,
+      active_plan_key: nextPlan.key,
+      active_plan_started_on: getTodayDateKey(),
+      active_plan_completed_days: [],
+    });
+  }
+
+  function togglePlanDay(dayNumber: number) {
+    if (!profile) return;
+
+    const completedDays = profile.active_plan_completed_days.includes(dayNumber)
+      ? profile.active_plan_completed_days.filter((day) => day !== dayNumber)
+      : [...profile.active_plan_completed_days, dayNumber].sort((a, b) => a - b);
+
+    updateProfile({ active_plan_completed_days: completedDays });
+  }
+
+  function startNextWeeklyPlan() {
+    if (!profile) return;
+
+    const activePlan = getActivePlan(profile);
+    const nextPlan = getNextPlan(profile);
+    const completedPlanKeys = profile.completed_plan_keys.includes(activePlan.key)
+      ? profile.completed_plan_keys
+      : [...profile.completed_plan_keys, activePlan.key];
+
+    updateProfile({
+      active_plan_key: nextPlan.key,
+      active_plan_started_on: getTodayDateKey(),
+      active_plan_completed_days: [],
+      completed_plan_keys: completedPlanKeys,
+    });
+  }
+
   const selectedExpression = library.find((item) => item.id === selectedExpressionId) ?? null;
   const practiceExpression = library.find((item) => item.id === practiceExpressionId) ?? starterLibrary[0];
+  const libraryFilters = [
+    { label: t.library.filters[0], value: "" },
+    { label: t.library.filters[1], value: "Work Meeting" },
+    { label: t.library.filters[2], value: "Small Talk" },
+    { label: t.library.filters[3], value: "Struggling" },
+  ];
   const todaysPracticeCount = practiceSessions.filter(
     (session) => new Date(session.created_at).toDateString() === new Date().toDateString(),
   ).length;
@@ -312,7 +998,7 @@ export default function Home() {
         hour: "numeric",
         minute: "2-digit",
       }).format(new Date(practiceSessions[0].created_at))
-    : "Not yet";
+    : appLanguage === "zh" ? "暂无" : "Not yet";
   const practicedExpressionCounts = practiceSessions.reduce<Record<string, number>>((counts, session) => {
     if (session.expression_id) {
       counts[session.expression_id] = (counts[session.expression_id] ?? 0) + 1;
@@ -339,34 +1025,15 @@ export default function Home() {
           .slice(0, 3)
       : starterLibrary.slice(0, 2);
   const focusExpression = reviewItems[0];
-  const masteredCount = library.filter((item) => item.status === "Mastered").length;
-  const planProgress = library.length > 0 ? Math.max(8, Math.round((masteredCount / library.length) * 100)) : 28;
-  const focusPracticeCount = focusExpression ? practicedExpressionCounts[focusExpression.id] ?? 0 : 0;
-  const focusReason =
-    focusExpression?.status === "Struggling"
-      ? "it is marked as struggling"
-      : focusPracticeCount === 0
-        ? "it has not been practised yet"
-        : "it is still in your active queue";
-  const adaptivePlan = focusExpression
-    ? {
-        title: `Current focus: ${focusExpression.category}`,
-        copy: `Prioritising this because ${focusReason}. Start with one target expression, then reuse it in a short workplace answer.`,
-        tasks: [
-          ["Day 4", focusExpression.english, `Real task: say this from memory, then adapt it to a tax-accounting situation.`],
-          ["Day 5", "Clarify the context", `Real task: add one follow-up question before or after the ${focusExpression.category} expression.`],
-          ["Day 6", "Make it longer", "Real task: turn the sentence into a 20-second meeting response with one reason and one next step."],
-        ],
-      }
-    : {
-        title: "Current weakness: concise meeting responses",
-        copy: "SpeakVault will prioritise clarification, interruptions, and progress updates this week.",
-        tasks: [
-          ["Day 4", "Ask for clarification", "Real task: ask whether a tax figure uses the latest client data."],
-          ["Day 5", "Interrupt politely", "Real task: add one quick point without sounding abrupt."],
-          ["Day 6", "Explain a delay", "Real task: ask for more time while keeping confidence."],
-        ],
-      };
+  const profileContext = getProfileContext(profile);
+  const activePlan = getActivePlan(profile);
+  const planProgress = Math.round(((profile?.active_plan_completed_days.length ?? 0) / activePlan.tasks.length) * 100);
+  const isWeeklyPlanComplete = (profile?.active_plan_completed_days.length ?? 0) >= activePlan.tasks.length;
+  const isNextPlanWeekAvailable = profile ? isNewPlanWeekAvailable(profile.active_plan_started_on) : false;
+  const profileRoleDisplay =
+    profileContext.role === "Student" && profileContext.major
+      ? `${profileContext.role} · ${profileContext.major} · ${profileContext.location}`
+      : `${profileContext.role} · ${profileContext.location}`;
 
   function startPractice(expression: Expression) {
     setPracticeExpressionId(expression.id);
@@ -509,7 +1176,7 @@ export default function Home() {
     recognition.onerror = (event) => {
       const message =
         event.error === "not-allowed"
-          ? "Microphone access was blocked. Allow microphone access for localhost in Chrome, then try again."
+          ? "Microphone access was blocked. Allow microphone access for this site in Chrome, then try again."
           : `Speech recognition error: ${event.error}`;
       showVoiceIssue(message);
       setIsRecording(false);
@@ -732,6 +1399,7 @@ export default function Home() {
           chinesePrompt: practiceExpression.chinese,
           inputMode,
           audioDurationMs: safeDurationMs,
+          profile: profileContext,
         }),
       });
       const result = (await response.json()) as PracticeFeedback | { error?: string };
@@ -919,7 +1587,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ thought }),
+        body: JSON.stringify({ thought, profile: profileContext }),
       });
 
       const data = (await response.json()) as {
@@ -948,7 +1616,7 @@ export default function Home() {
             <span className="vault-arc" />
             <span className="brand-letters">SV</span>
           </div>
-          <p>Loading SpeakVault...</p>
+          <p>{t.common.loading}</p>
         </section>
       </main>
     );
@@ -967,45 +1635,61 @@ export default function Home() {
             </div>
           </div>
           <div className="login-copy">
-            <p className="eyebrow">Personal fluency system</p>
+            <p className="eyebrow">{t.auth.eyebrow}</p>
             <h1>SpeakVault</h1>
-            <p>Build a private vault of workplace-ready English you can actually say.</p>
+            <p>{t.auth.tagline}</p>
           </div>
           <form className="login-card" onSubmit={handleAuth}>
+            <div className="language-switch" aria-label="System language">
+              <button
+                className={appLanguage === "en" ? "active" : ""}
+                type="button"
+                onClick={() => setAppLanguage("en")}
+              >
+                EN
+              </button>
+              <button
+                className={appLanguage === "zh" ? "active" : ""}
+                type="button"
+                onClick={() => setAppLanguage("zh")}
+              >
+                中文
+              </button>
+            </div>
             <div className="auth-toggle" aria-label="Authentication mode">
               <button
                 className={authMode === "sign-in" ? "active" : ""}
                 type="button"
                 onClick={() => setAuthMode("sign-in")}
               >
-                Sign in
+                {t.auth.signIn}
               </button>
               <button
                 className={authMode === "sign-up" ? "active" : ""}
                 type="button"
                 onClick={() => setAuthMode("sign-up")}
               >
-                Create account
+                {t.auth.createAccount}
               </button>
             </div>
             <label>
-              Email
+              {t.auth.email}
               <input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} autoComplete="email" />
             </label>
             <label>
-              Password
+              {t.auth.password}
               <input
                 type="password"
                 value={authPassword}
                 onChange={(event) => setAuthPassword(event.target.value)}
                 autoComplete={authMode === "sign-in" ? "current-password" : "new-password"}
                 minLength={6}
-                placeholder="At least 6 characters"
+                placeholder={t.auth.passwordPlaceholder}
               />
             </label>
             {authMessage && <p className="form-message">{authMessage}</p>}
             <button className="primary-button" type="submit" disabled={isAuthLoading}>
-              {isAuthLoading ? "Working..." : authMode === "sign-in" ? "Sign in" : "Create account"}
+              {isAuthLoading ? t.auth.working : authMode === "sign-in" ? t.auth.signIn : t.auth.createAccount}
             </button>
           </form>
         </section>
@@ -1018,8 +1702,8 @@ export default function Home() {
       <section className="screen active" aria-label="SpeakVault app">
         <header className="app-header">
           <div>
-            <p className="eyebrow">Day 4 of 30</p>
-            <h2>{viewTitles[activeView]}</h2>
+            <p className="eyebrow">{t.common.day}</p>
+            <h2>{t.viewTitles[activeView]}</h2>
           </div>
           <button className="icon-button" type="button" onClick={() => setActiveView("profile")} aria-label="Open profile">
             {user.email?.slice(0, 2).toUpperCase() ?? "SV"}
@@ -1032,9 +1716,9 @@ export default function Home() {
           <div className="view active">
             <section className="daily-panel">
               <div>
-                <p className="eyebrow">Today&apos;s mission</p>
+                <p className="eyebrow">{t.practice.mission}</p>
                 <h3>{practiceExpression.category}</h3>
-                <p>Look at the Chinese prompt, say the English out loud, then compare it with your target expression.</p>
+                <p>{t.practice.missionCopy}</p>
               </div>
               <button
                 className="pulse-button"
@@ -1044,28 +1728,28 @@ export default function Home() {
                   resetPracticeCapture();
                 }}
               >
-                Start
+                {t.practice.start}
               </button>
             </section>
 
             <section className="metric-grid" aria-label="Daily metrics">
               <article>
                 <strong>{todaysPracticeCount}</strong>
-                <span>today</span>
+                <span>{t.practice.today}</span>
               </article>
               <article>
                 <strong>{practiceSessions.length}</strong>
-                <span>recent</span>
+                <span>{t.practice.recent}</span>
               </article>
               <article>
                 <strong className="compact-stat">{lastPracticeTime}</strong>
-                <span>last</span>
+                <span>{t.practice.last}</span>
               </article>
             </section>
 
             <section className="practice-card">
               <div className="card-topline">
-                <span>Speaking prompt</span>
+                <span>{t.practice.prompt}</span>
                 <b>{practiceExpression.difficulty}</b>
               </div>
               <p className="chinese-prompt">{practiceExpression.chinese}</p>
@@ -1076,13 +1760,19 @@ export default function Home() {
                 onClick={isRecording ? stopSpeechPractice : startSpeechPractice}
               >
                 <span />
-                {isSavingPractice ? "Saving..." : isRecording ? "Stop and save" : showTranscript ? "Record again" : "Start speaking"}
+                {isSavingPractice
+                  ? t.common.saving
+                  : isRecording
+                    ? t.practice.stopAndSave
+                    : showTranscript
+                      ? t.practice.recordAgain
+                      : t.practice.startSpeaking}
               </button>
               {practiceVoiceMessage && <p className="practice-message">{practiceVoiceMessage}</p>}
               {practiceAudioUrl && (
                 <div className="audio-review">
                   <div>
-                    <p className="label">Recorded audio</p>
+                    <p className="label">{t.practice.recordedAudio}</p>
                     <span>{(audioDurationMs / 1000).toFixed(1)}s · {practiceInputMode}</span>
                   </div>
                   <audio controls src={practiceAudioUrl} />
@@ -1090,39 +1780,39 @@ export default function Home() {
               )}
               {isRecording && spokenTranscript && (
                 <div className="live-transcript">
-                  <p className="label">Live transcript</p>
+                  <p className="label">{t.practice.liveTranscript}</p>
                   <p>{spokenTranscript}</p>
                 </div>
               )}
               {showTranscript && (
                 <div className="transcript-panel">
-                  <p className="label">Your transcript</p>
+                  <p className="label">{t.practice.yourTranscript}</p>
                   <p>{spokenTranscript || practiceExpression.english}</p>
                   <div className="score-row">
-                    <span>Pronunciation {practiceFeedback?.pronunciation_score ?? 82}</span>
-                    <span>Accent {practiceFeedback?.accent_score ?? 82}</span>
-                    <span>Fluency {practiceFeedback?.fluency_score ?? 84}</span>
-                    <span>Naturalness {practiceFeedback?.naturalness_score ?? 88}</span>
-                    <span>Completeness {practiceFeedback?.completeness_score ?? 91}</span>
+                    <span>{t.practice.pronunciation} {practiceFeedback?.pronunciation_score ?? 82}</span>
+                    <span>{t.common.accent} {practiceFeedback?.accent_score ?? 82}</span>
+                    <span>{t.practice.fluency} {practiceFeedback?.fluency_score ?? 84}</span>
+                    <span>{t.practice.naturalness} {practiceFeedback?.naturalness_score ?? 88}</span>
+                    <span>{t.practice.completeness} {practiceFeedback?.completeness_score ?? 91}</span>
                   </div>
                   {practiceFeedback && (
                     <div className="feedback-notes">
-                      <p className="label">AI feedback</p>
+                      <p className="label">{t.practice.aiFeedback}</p>
                       <p>{practiceFeedback.summary}</p>
                       <p>
-                        <b>Accent focus:</b> {practiceFeedback.accent_focus}
+                        <b>{t.practice.accentFocus}:</b> {practiceFeedback.accent_focus}
                       </p>
                       <p>
-                        <b>Drill:</b> {practiceFeedback.pronunciation_drill}
+                        <b>{t.common.drill}:</b> {practiceFeedback.pronunciation_drill}
                       </p>
                       <p>
-                        <b>Audio:</b> {practiceFeedback.audio_note}
+                        <b>{t.common.audio}:</b> {practiceFeedback.audio_note}
                       </p>
                       <p>
-                        <b>Better:</b> {practiceFeedback.better_version}
+                        <b>{t.common.better}:</b> {practiceFeedback.better_version}
                       </p>
                       <p>
-                        <b>Next:</b> {practiceFeedback.next_step}
+                        <b>{t.common.next}:</b> {practiceFeedback.next_step}
                       </p>
                     </div>
                   )}
@@ -1130,33 +1820,38 @@ export default function Home() {
               )}
               {!isRecording && (!showTranscript || (practiceAudioUrl && !spokenTranscript.trim())) && (
                 <div className="manual-transcript">
-                  <label htmlFor="manual-transcript">Typed transcript</label>
+                  <label htmlFor="manual-transcript">{t.practice.typedTranscript}</label>
                   <textarea
                     id="manual-transcript"
                     value={spokenTranscript}
                     onChange={(event) => setSpokenTranscript(event.target.value)}
-                    placeholder="Type what you said if transcription is missing."
+                    placeholder={t.practice.transcriptPlaceholder}
                   />
-                  <button className="secondary-button" type="button" disabled={isSavingPractice} onClick={saveTypedTranscript}>
-                    Save typed transcript
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={isSavingPractice || !spokenTranscript.trim()}
+                    onClick={saveTypedTranscript}
+                  >
+                    {t.practice.saveTypedTranscript}
                   </button>
                 </div>
               )}
               <div className="target-expression">
-                <p className="label">Target expression</p>
+                <p className="label">{t.practice.targetExpression}</p>
                 <p>{practiceExpression.english}</p>
               </div>
             </section>
 
             <section>
               <div className="section-heading">
-                <h3>Recent practice</h3>
-                <span className="subtle-count">{practiceSessions.length} saved</span>
+                <h3>{t.practice.recentPractice}</h3>
+                <span className="subtle-count">{practiceSessions.length} {t.practice.savedCount}</span>
               </div>
               <div className="session-list">
                 {practiceSessions.length === 0 ? (
                   <article className="session-card">
-                    <p>No practice sessions yet. Record once to start your history.</p>
+                    <p>{t.practice.noSessions}</p>
                   </article>
                 ) : (
                   practiceSessions.slice(0, 3).map((session) => (
@@ -1177,7 +1872,7 @@ export default function Home() {
                           )}
                         </b>
                       </div>
-                      {session.expressions && <p className="session-source">Prompt: {session.expressions.chinese}</p>}
+                      {session.expressions && <p className="session-source">{t.practice.promptLabel}: {session.expressions.chinese}</p>}
                       <p>{session.transcript}</p>
                       <div className="score-row">
                         <span>P {session.pronunciation_score}</span>
@@ -1201,27 +1896,27 @@ export default function Home() {
                           )}
                           {session.accent_focus && (
                             <p>
-                              <b>Accent:</b> {session.accent_focus}
+                              <b>{t.common.accent}:</b> {session.accent_focus}
                             </p>
                           )}
                           {session.pronunciation_drill && (
                             <p>
-                              <b>Drill:</b> {session.pronunciation_drill}
+                              <b>{t.common.drill}:</b> {session.pronunciation_drill}
                             </p>
                           )}
                           {session.audio_note && (
                             <p>
-                              <b>Audio note:</b> {session.audio_note}
+                              <b>{t.practice.audioNote}:</b> {session.audio_note}
                             </p>
                           )}
                           {session.better_version && (
                             <p>
-                              <b>Better:</b> {session.better_version}
+                              <b>{t.common.better}:</b> {session.better_version}
                             </p>
                           )}
                           {session.next_step && (
                             <p>
-                              <b>Next:</b> {session.next_step}
+                              <b>{t.common.next}:</b> {session.next_step}
                             </p>
                           )}
                         </div>
@@ -1234,9 +1929,9 @@ export default function Home() {
 
             <section>
               <div className="section-heading">
-                <h3>Review queue</h3>
+                <h3>{t.practice.reviewQueue}</h3>
                 <button className="text-button" type="button" onClick={() => setActiveView("library")}>
-                  View all
+                  {t.practice.viewAll}
                 </button>
               </div>
               <div className="mini-list">
@@ -1254,11 +1949,11 @@ export default function Home() {
         {activeView === "generate" && (
           <div className="view active">
             <section className="input-panel">
-              <label htmlFor="thought-input">Chinese thought</label>
+              <label htmlFor="thought-input">{t.generate.thoughtLabel}</label>
               <textarea id="thought-input" value={thought} onChange={(event) => setThought(event.target.value)} />
               {generateError && <p className="form-message">{generateError}</p>}
-              <button className="primary-button" type="button" onClick={generateExpressions} disabled={isGenerating}>
-                {isGenerating ? "Generating..." : "Generate 3 expressions"}
+              <button className="primary-button" type="button" onClick={generateExpressions} disabled={isGenerating || !thought.trim()}>
+                {isGenerating ? t.generate.generating : t.generate.button}
               </button>
             </section>
 
@@ -1273,8 +1968,8 @@ export default function Home() {
                       <b>{sample.category}</b>
                     </div>
                     <h3>{sample.english}</h3>
-                    <p>中文：{sample.chinese}</p>
-                    <p>Why it works: {sample.note}</p>
+                    <p>{t.common.chinese}: {sample.chinese}</p>
+                    <p>{t.generate.why}: {sample.note}</p>
                     <div className="tag-row">
                       {sample.tags.map((tag) => (
                         <span key={tag}>{tag}</span>
@@ -1286,7 +1981,7 @@ export default function Home() {
                       onClick={() => saveExpression(sample)}
                       disabled={alreadySaved || savingExpression === key}
                     >
-                      {alreadySaved ? "Saved" : savingExpression === key ? "Saving..." : "Save to Library"}
+                      {alreadySaved ? t.common.saved : savingExpression === key ? t.common.saving : t.generate.saveToLibrary}
                     </button>
                   </article>
                 );
@@ -1300,19 +1995,19 @@ export default function Home() {
             <section className="search-panel">
               <input
                 type="search"
-                placeholder="Search expressions or tags"
+                placeholder={t.library.search}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
               <div className="filter-row">
-                {["All", "Work Meeting", "Small Talk", "Struggling"].map((filter) => (
+                {libraryFilters.map((filter) => (
                   <button
-                    className={`chip ${query === filter || (filter === "All" && !query) ? "active" : ""}`}
-                    key={filter}
+                    className={`chip ${query === filter.value || (!filter.value && !query) ? "active" : ""}`}
+                    key={filter.value || "all"}
                     type="button"
-                    onClick={() => setQuery(filter === "All" ? "" : filter)}
+                    onClick={() => setQuery(filter.value)}
                   >
-                    {filter}
+                    {filter.label}
                   </button>
                 ))}
               </div>
@@ -1320,13 +2015,13 @@ export default function Home() {
             <section className="library-list">
               {isLibraryLoading ? (
                 <article className="library-card">
-                  <h3>Loading your vault...</h3>
-                  <p>Fetching your saved expressions from Supabase.</p>
+                  <h3>{t.library.loadingTitle}</h3>
+                  <p>{t.library.loadingCopy}</p>
                 </article>
               ) : filteredLibrary.length === 0 ? (
                 <article className="library-card">
-                  <h3>Your vault is empty</h3>
-                  <p>Go to Generate, save an expression, and it will appear here.</p>
+                  <h3>{t.library.emptyTitle}</h3>
+                  <p>{t.library.emptyCopy}</p>
                 </article>
               ) : (
                 filteredLibrary.map((item) => (
@@ -1346,7 +2041,7 @@ export default function Home() {
                       <b>{item.status}</b>
                     </div>
                     <h3>{item.english}</h3>
-                    <p>中文：{item.chinese}</p>
+                    <p>{t.common.chinese}: {item.chinese}</p>
                     <p>{item.note}</p>
                     <div className="tag-row">
                       {item.tags.map((tag) => (
@@ -1360,9 +2055,9 @@ export default function Home() {
             {selectedExpression && (
               <section className="detail-panel" aria-label="Expression details">
                 <div className="section-heading">
-                  <h3>Expression details</h3>
+                  <h3>{t.library.details}</h3>
                   <button className="text-button" type="button" onClick={() => setSelectedExpressionId("")}>
-                    Close
+                    {t.common.close}
                   </button>
                 </div>
                 <article className="detail-card">
@@ -1375,36 +2070,36 @@ export default function Home() {
                   {isEditingExpression ? (
                     <div className="edit-form">
                       <label>
-                        English
+                        {t.library.english}
                         <textarea value={editExpressionForm.english} onChange={(event) => setEditField("english", event.target.value)} />
                       </label>
                       <label>
-                        Chinese
+                        {t.library.chinese}
                         <textarea value={editExpressionForm.chinese} onChange={(event) => setEditField("chinese", event.target.value)} />
                       </label>
                       <div className="two-column-fields">
                         <label>
-                          Category
+                          {t.library.category}
                           <input value={editExpressionForm.category} onChange={(event) => setEditField("category", event.target.value)} />
                         </label>
                         <label>
-                          Difficulty
+                          {t.library.difficulty}
                           <input value={editExpressionForm.difficulty} onChange={(event) => setEditField("difficulty", event.target.value)} />
                         </label>
                       </div>
                       <label>
-                        Why it works
+                        {t.library.why}
                         <textarea value={editExpressionForm.note} onChange={(event) => setEditField("note", event.target.value)} />
                       </label>
                       <label>
-                        Alternatives
+                        {t.library.alternatives}
                         <textarea
                           value={editExpressionForm.alternatives}
                           onChange={(event) => setEditField("alternatives", event.target.value)}
                         />
                       </label>
                       <label>
-                        Tags
+                        {t.library.tags}
                         <textarea value={editExpressionForm.tags} onChange={(event) => setEditField("tags", event.target.value)} />
                       </label>
                       <div className="detail-actions">
@@ -1414,23 +2109,23 @@ export default function Home() {
                           disabled={updatingExpressionId === selectedExpression.id}
                           onClick={() => saveExpressionEdits(selectedExpression)}
                         >
-                          {updatingExpressionId === selectedExpression.id ? "Saving..." : "Save changes"}
+                          {updatingExpressionId === selectedExpression.id ? t.common.saving : t.library.saveChanges}
                         </button>
                         <button className="text-button" type="button" onClick={() => setIsEditingExpression(false)}>
-                          Cancel
+                          {t.common.cancel}
                         </button>
                       </div>
                     </div>
                   ) : (
                     <>
                       <h3>{selectedExpression.english}</h3>
-                      <p>中文：{selectedExpression.chinese}</p>
+                      <p>{t.common.chinese}: {selectedExpression.chinese}</p>
                       <div className="detail-block">
-                        <span>Why it works</span>
+                        <span>{t.library.why}</span>
                         <p>{selectedExpression.note}</p>
                       </div>
                       <div className="detail-block">
-                        <span>Alternatives</span>
+                        <span>{t.library.alternatives}</span>
                         <ul>
                           {selectedExpression.alternatives.map((alternative) => (
                             <li key={alternative}>{alternative}</li>
@@ -1438,7 +2133,7 @@ export default function Home() {
                         </ul>
                       </div>
                       <div className="detail-block">
-                        <span>Tags</span>
+                        <span>{t.library.tags}</span>
                         <div className="tag-row">
                           {selectedExpression.tags.map((tag) => (
                             <span key={tag}>{tag}</span>
@@ -1446,7 +2141,7 @@ export default function Home() {
                         </div>
                       </div>
                       <div className="detail-block">
-                        <span>Mastery status</span>
+                        <span>{t.library.mastery}</span>
                         <div className="status-grid">
                           {masteryStatuses.map((status) => (
                             <button
@@ -1463,10 +2158,10 @@ export default function Home() {
                       </div>
                       <div className="detail-actions">
                         <button className="secondary-button" type="button" onClick={() => startPractice(selectedExpression)}>
-                          Practice this
+                          {t.library.practiceThis}
                         </button>
                         <button className="secondary-button" type="button" onClick={() => beginEditExpression(selectedExpression)}>
-                          Edit expression
+                          {t.library.edit}
                         </button>
                         <button
                           className="danger-button"
@@ -1474,7 +2169,7 @@ export default function Home() {
                           disabled={updatingExpressionId === selectedExpression.id}
                           onClick={() => deleteExpression(selectedExpression)}
                         >
-                          {updatingExpressionId === selectedExpression.id ? "Updating..." : "Delete expression"}
+                          {updatingExpressionId === selectedExpression.id ? t.common.updating : t.library.delete}
                         </button>
                       </div>
                     </>
@@ -1488,21 +2183,38 @@ export default function Home() {
         {activeView === "plan" && (
           <div className="view active">
             <section className="plan-panel">
-              <p className="eyebrow">Adaptive plan</p>
-              <h3>{adaptivePlan.title}</h3>
+              <p className="eyebrow">{t.plan.eyebrow}</p>
+              <h3>{activePlan.title}</h3>
               <div className="progress-track">
                 <span style={{ width: `${planProgress}%` }} />
               </div>
-              <p>{adaptivePlan.copy}</p>
+              <p>{activePlan.copy}</p>
+              <p className="plan-meta">
+                {profileRoleDisplay} · {profileContext.english_style} · {profile?.active_plan_completed_days.length ?? 0}/7 {t.plan.progress}
+              </p>
+              {isWeeklyPlanComplete && isNextPlanWeekAvailable && (
+                <button className="secondary-button" type="button" onClick={startNextWeeklyPlan}>
+                  {t.plan.startNext}
+                </button>
+              )}
+              {isWeeklyPlanComplete && !isNextPlanWeekAvailable && <p className="plan-meta">{t.plan.nextWeekReady}</p>}
             </section>
             <section className="day-list">
-              {adaptivePlan.tasks.map(([day, title, copy], index) => (
-                <article className={`day-card ${index === 0 ? "active-day" : ""}`} key={day}>
-                  <span>{day}</span>
-                  <h3>{title}</h3>
-                  <p>{copy}</p>
-                </article>
-              ))}
+              {activePlan.tasks.map((task, index) => {
+                const dayNumber = index + 1;
+                const isComplete = profile?.active_plan_completed_days.includes(dayNumber) ?? false;
+
+                return (
+                  <article className={`day-card ${index === 0 ? "active-day" : ""} ${isComplete ? "completed-day" : ""}`} key={task.title}>
+                    <span>Day {dayNumber}</span>
+                    <h3>{task.title}</h3>
+                    <p>{task.copy}</p>
+                    <button className="chip" type="button" onClick={() => togglePlanDay(dayNumber)}>
+                      {isComplete ? t.common.completed : t.common.complete}
+                    </button>
+                  </article>
+                );
+              })}
             </section>
           </div>
         )}
@@ -1511,16 +2223,112 @@ export default function Home() {
           <div className="view active">
             <section className="profile-panel">
               <div className="avatar">{user.email?.slice(0, 2).toUpperCase() ?? "SV"}</div>
-              <h3>Tax Accountant · Auckland</h3>
+              <h3>{profileRoleDisplay}</h3>
               <p>{user.email}</p>
-              <p>Target accent: NZ / AU workplace English</p>
+              <p>{profileContext.english_style} English</p>
             </section>
             <section className="settings-list">
+              <div className="setting-row setting-row-static setting-row-stack">
+                <span>{t.profile.role}</span>
+                <div className="select-grid">
+                  <label>
+                    {t.profile.roleLabel}
+                    <select
+                      value={profileContext.role}
+                      onChange={(event) => {
+                        const nextRole = event.target.value as UserRole;
+                        updateLearningContext({
+                          role: nextRole,
+                          major: nextRole === "Student" ? profile?.major || "Accounting" : "",
+                        });
+                      }}
+                    >
+                      {roleOptions.map((role) => (
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {profileContext.role === "Student" && (
+                    <label>
+                      {t.profile.majorLabel}
+                      <select
+                        value={profileContext.major || "Accounting"}
+                        onChange={(event) => updateLearningContext({ major: event.target.value })}
+                      >
+                        {majorOptions.map((major) => (
+                          <option key={major} value={major}>
+                            {major}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <label>
+                    {t.profile.locationLabel}
+                    <select value={profileContext.location} onChange={(event) => updateLearningContext({ location: event.target.value })}>
+                      {locationOptions.map((location) => (
+                        <option key={location} value={location}>
+                          {location}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <div className="setting-row setting-row-static setting-row-stack">
+                <span>{t.profile.englishStyle}</span>
+                <div className="option-grid">
+                  {englishStyleOptions.map((style) => (
+                    <button
+                      className={`chip ${profileContext.english_style === style ? "active" : ""}`}
+                      key={style}
+                      type="button"
+                      onClick={() => updateProfile({ english_style: style })}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="setting-row setting-row-static setting-row-stack">
+                <span>{t.profile.visualStyle}</span>
+                <div className="option-grid">
+                  {visualStyleOptions.map((style) => (
+                    <button
+                      className={`chip ${(profile?.visual_style ?? "System") === style ? "active" : ""}`}
+                      key={style}
+                      type="button"
+                      onClick={() => updateProfile({ visual_style: style })}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="setting-row setting-row-static">
+                <span>{t.profile.language}</span>
+                <div className="language-switch compact" aria-label="System language">
+                  <button
+                    className={appLanguage === "en" ? "active" : ""}
+                    type="button"
+                    onClick={() => setAppLanguage("en")}
+                  >
+                    EN
+                  </button>
+                  <button
+                    className={appLanguage === "zh" ? "active" : ""}
+                    type="button"
+                    onClick={() => setAppLanguage("zh")}
+                  >
+                    中文
+                  </button>
+                </div>
+              </div>
               {[
-                ["AI voice", "Selectable"],
-                ["Interface language", "English"],
-                ["Visual style", "Notion simple"],
-                ["Login security", "Supabase Auth"],
+                [t.profile.profileSync, isProfileLoading ? t.auth.working : t.profile.supabaseProfile],
+                [t.profile.loginSecurity, t.profile.supabaseAuth],
               ].map(([label, value]) => (
                 <button className="setting-row" key={label} type="button">
                   <span>{label}</span>
@@ -1528,8 +2336,8 @@ export default function Home() {
                 </button>
               ))}
               <button className="setting-row" type="button" onClick={signOut}>
-                <span>Session</span>
-                <b>Sign out</b>
+                <span>{t.profile.session}</span>
+                <b>{t.profile.signOut}</b>
               </button>
             </section>
           </div>
@@ -1537,11 +2345,11 @@ export default function Home() {
 
         <nav className="bottom-nav" aria-label="Primary navigation">
           {[
-            ["practice", "◌", "Practice"],
-            ["generate", "+", "Generate"],
-            ["library", "⌕", "Library"],
-            ["plan", "▣", "Plan"],
-            ["profile", "◇", "Profile"],
+            ["practice", "◌", t.nav.practice],
+            ["generate", "+", t.nav.generate],
+            ["library", "⌕", t.nav.library],
+            ["plan", "▣", t.nav.plan],
+            ["profile", "◇", t.nav.profile],
           ].map(([view, icon, label]) => (
             <button
               className={`nav-button ${activeView === view ? "active" : ""}`}

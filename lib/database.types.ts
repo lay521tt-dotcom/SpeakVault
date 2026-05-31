@@ -1,4 +1,16 @@
 export type MasteryStatus = "New" | "Practising" | "Struggling" | "Mastered";
+export type UserRole =
+  | "Tax Accountant"
+  | "Accountant"
+  | "Auditor"
+  | "Software / IT"
+  | "Business / Admin"
+  | "Healthcare"
+  | "Hospitality / Retail"
+  | "Student"
+  | "Other";
+export type EnglishStyle = "New Zealand" | "Australian" | "British" | "American" | "Canadian";
+export type VisualStyle = "System" | "Light" | "Dark";
 
 export type Expression = {
   id: string;
@@ -40,6 +52,21 @@ export type PracticeSession = {
 
 export type PracticeSessionWithExpression = PracticeSession & {
   expressions: Pick<Expression, "id" | "english" | "chinese" | "category" | "difficulty"> | null;
+};
+
+export type UserProfile = {
+  user_id: string;
+  role: UserRole;
+  major: string;
+  location: string;
+  english_style: EnglishStyle;
+  visual_style: VisualStyle;
+  active_plan_key: string;
+  active_plan_started_on: string;
+  active_plan_completed_days: number[];
+  completed_plan_keys: string[];
+  created_at: string;
+  updated_at: string;
 };
 
 export type Database = {
@@ -111,6 +138,36 @@ export type Database = {
           audio_note: string | null;
           better_version: string | null;
           next_step: string | null;
+        }>;
+        Relationships: [];
+      };
+      user_profiles: {
+        Row: UserProfile;
+        Insert: {
+          user_id: string;
+          role?: UserRole;
+          major?: string;
+          location?: string;
+          english_style?: EnglishStyle;
+          visual_style?: VisualStyle;
+          active_plan_key?: string;
+          active_plan_started_on?: string;
+          active_plan_completed_days?: number[];
+          completed_plan_keys?: string[];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<{
+          role: UserRole;
+          major: string;
+          location: string;
+          english_style: EnglishStyle;
+          visual_style: VisualStyle;
+          active_plan_key: string;
+          active_plan_started_on: string;
+          active_plan_completed_days: number[];
+          completed_plan_keys: string[];
+          updated_at: string;
         }>;
         Relationships: [];
       };
