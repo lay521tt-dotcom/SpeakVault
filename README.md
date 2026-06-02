@@ -1,8 +1,14 @@
 # SpeakVault v2.2
 
-SpeakVault is a first-phase English speaking Web App. It helps you turn Chinese thoughts into natural English, save useful expressions, practise speaking aloud, and keep a private practice history.
+SpeakVault is a website-first English speaking product. It helps you turn Chinese thoughts into natural English, save useful expressions, practise speaking aloud, and keep a private practice history.
 
-This phase is focused on a stable personal web product, not a native App Store release. Use it from a desktop or mobile browser first; once the web flow is mature, it can be wrapped or rebuilt as an app.
+This phase is focused on a stable web product, not a native App Store release. Public visitors land on a professional website first, then sign in to use the training product.
+
+## Routes
+
+- `/` - public website homepage
+- `/login` - sign in and create account
+- `/app` - authenticated Practice, Generate, Library, Plan, and Profile product
 
 ## Current Product Scope
 
@@ -29,6 +35,8 @@ Open:
 ```txt
 http://localhost:3000
 ```
+
+Use `http://localhost:3000/login` for auth and `http://localhost:3000/app` for the authenticated product.
 
 ## Environment
 
@@ -71,15 +79,18 @@ npm run build
 
 Browser smoke test:
 
-1. Sign in.
-2. Update Profile role, location, English style, and visual style, then refresh and confirm they persist.
-3. Generate 3 expressions from a Chinese thought.
-4. Save one expression to Library.
-5. Start practice from Library or Practice.
-6. Save a typed transcript if microphone transcription is unavailable.
-7. Confirm Practice history shows the saved attempt.
-8. Mark a 7-day plan task complete.
-9. Switch Light, Dark, and System visual styles.
+1. Visit `/` and confirm the public website loads without login.
+2. Visit `/login` and sign in.
+3. Confirm sign-in redirects to `/app`.
+4. Visit `/app` while signed out and confirm it redirects to `/login`.
+5. Update Profile role, location, English style, and visual style, then refresh and confirm they persist.
+6. Generate 3 expressions from a Chinese thought.
+7. Save one expression to Library.
+8. Start practice from Library or Practice.
+9. Save a typed transcript if microphone transcription is unavailable.
+10. Confirm Practice history shows the saved attempt.
+11. Mark a 7-day plan task complete.
+12. Switch Light, Dark, and System visual styles.
 
 ## Deployment
 

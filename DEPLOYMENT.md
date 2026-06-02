@@ -56,15 +56,17 @@ Do not commit `.env.local`.
 
 On the deployed URL:
 
-1. Sign in or create an account.
-2. Open Profile and confirm role, location, English style, and visual style load.
-3. Change Visual style, refresh, and confirm it persists.
-4. Generate 3 expressions.
-5. Save one expression to Library.
-6. Start practice and save a typed transcript.
-7. Confirm the practice attempt appears in Recent practice.
-8. Mark a 7-day plan task complete and refresh.
-9. Confirm mobile browser layout is usable.
+1. Open `/` and confirm the public website loads without requiring login.
+2. Open `/login`, sign in or create an account, and confirm it redirects to `/app`.
+3. Open Profile and confirm role, location, English style, and visual style load.
+4. Change Visual style, refresh, and confirm it persists.
+5. Generate 3 expressions.
+6. Save one expression to Library.
+7. Start practice and save a typed transcript.
+8. Confirm the practice attempt appears in Recent practice.
+9. Mark a 7-day plan task complete and refresh.
+10. Sign out and confirm `/app` redirects to `/login`.
+11. Confirm mobile browser layout is usable for both `/` and `/app`.
 
 ## 5. Known Phase-One Boundaries
 

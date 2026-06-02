@@ -1,7 +1,7 @@
 {
   "name": "SpeakVault",
   "short_name": "SpeakVault",
-  "description": "A private English speaking web app for building workplace-ready expressions and practising aloud.",
+  "description": "A web product for turning Chinese thoughts into workplace-ready spoken English.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fbfaf8",

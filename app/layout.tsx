@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SpeakVault | English Speaking Web App",
-  description: "A private English speaking web app for building workplace-ready expressions and practising aloud.",
+  description: "A web product for turning Chinese thoughts into workplace-ready spoken English.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",
